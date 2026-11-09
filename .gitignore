@@ -1,0 +1,66 @@
+# .NET e relatórios locais
+**/bin/
+**/obj/
+**/TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+artifacts/
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Flutter / Dart e clientes futuros
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/build/
+**/android/local.properties
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Generated.xcconfig
+**/flutter_export_environment.sh
+**/node_modules/
+
+# Segredos, bancos e configuração específica da máquina
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/appsettings.Secrets.json
+**/secrets.json
+**/NuGet.Config.local
+*.pfx
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+*.mdf
+*.ldf
+*.bak
+.aws/
+.codex/
+.agents/
+
+# Temporários e logs
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Referência local preexistente; preservar fora do versionamento do Dia 1
+/Manual.pdf

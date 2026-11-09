@@ -1,0 +1,31 @@
+# Cronograma planejado — 09 a 22/11/2026
+
+Este é um plano interno de duas semanas, elaborado em 09/11/2026, e não uma declaração da data oficial de entrega da UNIP. Os dias de fim de semana constam do plano e dependem da disponibilidade acordada pela equipe. O progresso real e os impedimentos devem ser registrados no [diário de desenvolvimento](diario-desenvolvimento.md).
+
+| Dia | Data | Sprint | Atividade planejada | Evidência esperada |
+| --- | --- | --- | --- | --- |
+| 1 | 09/11, segunda-feira | S1 | Diagnosticar ambiente e arquivos; completar solução, domínio, API mínima, SQL de referência, testes e planejamento. | Arquivos revisados; restore/build/testes e HTTP registrados; estado Git conhecido. |
+| 2 | 10/11, terça-feira | S1 | Reavaliar atualização para .NET 10 antes do fim do suporte .NET 8; confirmar schema; preparar EF Core/SQL Server e primeira migration revisada. | Decisão de versão registrada com testes; migration aplicada em desenvolvimento real; constraints/rowversion verificadas; conexão sem segredo versionado. |
+| 3 | 11/11, quarta-feira | S1 | Implementar autenticação e autorização por perfis. | Hashing apropriado, identidade no servidor e testes de credenciais/401/403. |
+| 4 | 12/11, quinta-feira | S1 | Implementar gestão administrativa de usuários e criação/atribuição de tarefas. | Casos de uso persistidos, unicidade de e-mail e regras de cadastro testadas. |
+| 5 | 13/11, sexta-feira | S1 | Integrar histórico transacional de criação; revisar incremento e retrospectiva S1. | Demonstração autenticada, rollback verificado e backlog ajustado. |
+| 6 | 14/11, sábado | S2 | Implementar consultas paginadas e filtros com visibilidade por usuário. | Testes de permissões e consultas em SQL Server. |
+| 7 | 15/11, domingo | S2 | Implementar alterações, concorrência otimista e histórico. | Dois escritores testados; conflito sem sobrescrita; auditoria consistente. |
+| 8 | 16/11, segunda-feira | S2 | Implementar web responsiva com autenticação e consulta. | Web integrada à API, fluxo e exibição em tamanhos de tela previstos. |
+| 9 | 17/11, terça-feira | S2 | Concluir atualização de status na web; preparar procedures, functions e trigger com finalidade definida. | Fluxo web real e scripts SQL sem duplicar histórico. |
+| 10 | 18/11, quarta-feira | S2 | Testar objetos SQL e transações; revisar incremento e retrospectiva S2. | Evidências SQL, testes integrados e backlog ajustado. |
+| 11 | 19/11, quinta-feira | S3 | Implementar Flutter mínimo consumindo API. | Login, consulta e atualização de status demonstrados no cliente. |
+| 12 | 20/11, sexta-feira | S3 | Implementar desktop C# mínimo; preparar imagem Docker. | Cliente desktop integrado e build da imagem registrado. |
+| 13 | 21/11, sábado | S3 | Preparar Kubernetes mínimo e CI/CD; executar validação integrada. | Pipeline executado, configuração/probes verificadas e evidência de implantação quando disponível. |
+| 14 | 22/11, domingo | S3 | Reserva para correções; revisar requisitos, documentação e demonstração; retrospectiva S3. | Relatório de verificação, pendências explícitas e roteiro de demonstração. |
+
+## Dependências e riscos de prazo
+
+- O Dia 2 depende de acesso a uma instância real de SQL Server. Não substituir persistência por respostas estáticas para apresentar conclusão.
+- O suporte do .NET 8 termina em 10/11/2026; avaliar o .NET 10 já disponível antes de publicar. A base do Dia 1 permanece em .NET 8, conforme solicitado e detalhado na [arquitetura](arquitetura.md).
+- A autenticação deve preceder a exposição de operações de usuários e tarefas. Os clientes dependem dos contratos autenticados da API.
+- A decisão de schema e a estratégia de auditoria devem preceder migrations e triggers, evitando alterações concorrentes ou registros duplicados.
+- Docker, cluster e credenciais de implantação podem exigir preparação externa. Diretórios e manifests existentes não comprovam implantação; registrar o que foi executado.
+- A janela é curta para três clientes e infraestrutura. Revisar capacidade diariamente, reservar o último dia para correções e manter os clientes mínimos.
+
+O plano pode ser reordenado conforme impedimentos reais, preservando dependências, critérios de aceite e registro das decisões. Datas planejadas não devem ser reescritas como execução concluída sem evidências.

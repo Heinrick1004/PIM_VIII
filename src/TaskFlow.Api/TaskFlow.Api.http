@@ -1,0 +1,11 @@
+@TaskFlow.Api_HostAddress = http://localhost:5046
+
+GET {{TaskFlow.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+GET {{TaskFlow.Api_HostAddress}}/api/info
+Accept: application/json
+
+###

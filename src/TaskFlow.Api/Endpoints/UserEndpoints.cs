@@ -29,7 +29,12 @@ public static class UserEndpoints
         IPasswordHasher<Usuario> passwordHasher,
         CancellationToken cancellationToken)
     {
-        var validation = ValidateUser(request?.Nome, request?.Email, request?.Perfil, request?.Senha);
+        var validation = ValidateUser(
+            request?.Nome,
+            request?.Email,
+            request?.Perfil,
+            request?.Senha,
+            passwordRequired: true);
         if (validation is not null)
         {
             return validation;
@@ -148,7 +153,12 @@ public static class UserEndpoints
         return Results.Ok(ToResponse(user));
     }
 
-    private static IResult? ValidateUser(string? nome, string? email, PerfilUsuario? perfil, string? password)
+    private static IResult? ValidateUser(
+        string? nome,
+        string? email,
+        PerfilUsuario? perfil,
+        string? password,
+        bool passwordRequired = false)
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(nome) || nome.Trim().Length > Usuario.NomeMaxLength)
@@ -169,7 +179,7 @@ public static class UserEndpoints
             errors["perfil"] = ["Informe um perfil válido."];
         }
 
-        if (password is not null && !PasswordRules.IsValid(password))
+        if ((passwordRequired || password is not null) && !PasswordRules.IsValid(password))
         {
             errors["senha"] = [$"A senha deve ter entre {PasswordRules.MinimumLength} e {PasswordRules.MaximumLength} caracteres."];
         }

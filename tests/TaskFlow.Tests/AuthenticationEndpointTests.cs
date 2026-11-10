@@ -272,6 +272,50 @@ public sealed class AuthenticationEndpointTests
         Assert.Equal(HttpStatusCode.Conflict, duplicateUpdate.StatusCode);
     }
 
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("null")]
+    [InlineData("empty")]
+    [InlineData("short")]
+    [InlineData("too-long")]
+    public async Task UserManagement_CreateRejectsMissingOrInvalidPassword(string passwordCase)
+    {
+        await _database.ResetAsync();
+        await SeedUserAsync("Administrador", "admin@taskflow.test", Password, PerfilUsuario.Administrador);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, "admin@taskflow.test");
+
+        var request = new Dictionary<string, object?>
+        {
+            ["nome"] = "Senha inválida",
+            ["email"] = "invalid-password@taskflow.test",
+            ["perfil"] = PerfilUsuario.Funcionario
+        };
+
+        if (passwordCase != "missing")
+        {
+            request["senha"] = passwordCase switch
+            {
+                "null" => null,
+                "empty" => string.Empty,
+                "short" => new string('x', PasswordRules.MinimumLength - 1),
+                "too-long" => new string('x', PasswordRules.MaximumLength + 1),
+                _ => throw new ArgumentOutOfRangeException(nameof(passwordCase), passwordCase, "Unknown password case.")
+            };
+        }
+
+        using var response = await client.PostAsJsonAsync("/api/users", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = payload.RootElement.GetProperty("errors");
+        Assert.True(errors.TryGetProperty("senha", out var passwordErrors));
+        Assert.NotEmpty(passwordErrors.EnumerateArray());
+
+        await using var context = _database.CreateContext();
+        Assert.Equal(0, await context.Usuarios.CountAsync(user => user.Email == "invalid-password@taskflow.test"));
+    }
+
     [Fact]
     public async Task Employee_CannotCreateUsers()
     {

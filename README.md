@@ -4,9 +4,11 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 2 — 10/11/2026:** solução migrada para .NET 10 com EF Core 10, SQL Server, migrations, repositórios e unidade transacional. O banco existente `TaskFlowDev` foi atualizado sem apagar/recriar o banco; não há ainda autenticação nem CRUD HTTP. Web, desktop, Flutter, Docker, Kubernetes e CI/CD continuam fora do escopo atual.
+**Dia 3 — autenticação e usuários:** foram implementados login JWT, autorização por perfil, hashing de senha, bootstrap explícito do primeiro administrador e gerenciamento administrativo de usuários. O bootstrap manual em `TaskFlowDev` ainda não foi executado porque depende de senha definida localmente; os fluxos foram exercitados em SQL Server isolado. Nenhuma migration ou alteração de schema foi necessária. Os Dias 1 e 2 permanecem preservados.
 
-A validação real do Dia 2 terminou com **42 testes aprovados, 0 reprovados e 0 ignorados**: 25 de domínio, 6 de API/HTTP e 11 de integração em SQL Server real. Build: 0 avisos e 0 erros. Os resultados verificáveis estão em [ambiente](docs/ambiente.md), [modelo de dados](docs/modelo-dados.md) e [diário](docs/diario-desenvolvimento.md).
+A validação do Dia 3 mantém os 42 testes anteriores e acrescenta testes JWT, middleware e gestão de usuários. Os resultados finais e os grupos de categoria estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+
+Execução final: **52 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. `Category=Http` (13) e `Category=SqlServer` (19) se sobrepõem nos sete testes HTTP que usam SQL isolado; `Category=Domain` teve 25 e `Category=Security` teve 2.
 
 ## Tecnologias e requisitos
 
@@ -24,7 +26,7 @@ A solução foi migrada para **.NET 10 LTS** e validada com SDK 10.0.403 instala
 TaskFlow.sln
 src/
   TaskFlow.Api/              # HTTP, DI e Swagger
-  TaskFlow.Application/      # Informações da aplicação; casos de uso futuros
+  TaskFlow.Application/      # Contratos e informações da aplicação
   TaskFlow.Domain/           # Entidades, enums e invariantes
   TaskFlow.Infrastructure/   # EF Core, migrations e repositórios SQL Server
   TaskFlow.Web/              # Reservado
@@ -33,7 +35,7 @@ mobile/                     # Reservado para Flutter
 database/scripts/001_schema.sql
 infra/docker/               # Reservado
 infra/k8s/                  # Reservado
-tests/TaskFlow.Tests/        # 25 domínio, 6 API/HTTP e 10 SQL Server
+tests/TaskFlow.Tests/        # Domínio, HTTP/JWT e integração SQL Server
 docs/                       # Requisitos, decisões, planejamento e evidências
 ```
 
@@ -64,10 +66,16 @@ Invoke-RestMethod http://localhost:5046/api/info
 | --- | --- |
 | `GET /health` | HTTP 200, `status: "Healthy"` e `timestampUtc` atual em UTC |
 | `GET /api/info` | HTTP 200, `name: "TaskFlow"`, `version: "0.1.0"` e descrição |
+| `POST /api/auth/login` | Valida e-mail/senha e emite token de acesso assinado com duração de 60 minutos |
+| `GET /api/auth/me` | Requer JWT e devolve o perfil atual do usuário autenticado |
+| `POST /api/users` | Somente Administrador; cria funcionário ou administrador |
+| `GET /api/users` | Somente Administrador; listagem paginada, `pageSize` máximo 100 |
+| `GET /api/users/{id}` | Somente Administrador; consulta pública ou 404 |
+| `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-`/health` é uma verificação de vida do processo HTTP; não verifica banco nem dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Rotas administrativas retornam 401 sem token e 403 para funcionário. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
 
 ## Banco e configuração
 
@@ -75,12 +83,35 @@ Invoke-RestMethod http://localhost:5046/api/info
 
 Em Development, a API lê `ConnectionStrings:TaskFlow` de `src/TaskFlow.Api/appsettings.Development.json` e usa autenticação integrada para `TaskFlowDev`; não há senha no repositório. Ambientes sem essa configuração falham explicitamente. A suíte SQL cria um banco temporário `TaskFlowIntegrationTests_<GUID>` por execução, aplica migrations e remove apenas esse banco gerado. Nunca usa `TaskFlowDev`. Para outro SQL Server, defina `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório; a conta precisa de permissão para criar e remover bancos de teste. Credenciais de usuários e hashes não são fornecidos.
 
+### Segredo JWT e primeiro administrador (PowerShell)
+
+A chave JWT deve ser Base64 de ao menos 32 bytes aleatórios e fica somente no User Secrets ou variável externa. Configure-a localmente:
+
+```powershell
+$jwtKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(64))
+dotnet user-secrets set "Authentication:Jwt:SigningKey" $jwtKey --project src/TaskFlow.Api
+Remove-Variable jwtKey
+```
+
+Em outros ambientes, configure `Authentication__Jwt__SigningKey`, `Authentication__Jwt__Issuer` e `Authentication__Jwt__Audience` por variáveis seguras do ambiente/orquestrador. A ausência da chave nunca gera fallback.
+
+Em seguida, execute **explicitamente** o bootstrap; ele solicita nome/e-mail no terminal e lê a senha sem exibi-la. Só aceita o banco `TaskFlowDev`, não aplica migrations e não substitui administrador existente:
+
+```powershell
+dotnet run --project src/TaskFlow.Api --launch-profile http -- --bootstrap-admin
+```
+
+Para testar os endpoints, execute a API em Development, faça login em `POST /api/auth/login`, copie o access token para **Authorize** no Swagger e use `GET /api/auth/me` ou as rotas administrativas. Nunca registre ou compartilhe o token.
+
+Senhas são armazenadas com `PasswordHasher<Usuario>` do ASP.NET Core Identity (salt e derivação própria para senhas); mínimo de 12 caracteres, máximo de 128, com rehash automático quando necessário. E-mail é normalizado e a unicidade é garantida pela constraint SQL Server; conflitos retornam 409. Nenhum endpoint expõe `PasswordHash`.
+
 Para executar testes por categoria:
 
 ```powershell
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Domain"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Http"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=SqlServer"
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Security"
 ```
 
 ## Documentação e próximos passos
@@ -93,4 +124,4 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=SqlSer
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-Próximas etapas: casos de uso e endpoints de negócio, autenticação/autorização e clientes planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar login/CRUD no Swagger em `TaskFlowDev`; implementar tarefas e clientes planejados nas etapas seguintes. O plano de duas semanas não representa a data oficial de entrega da instituição.

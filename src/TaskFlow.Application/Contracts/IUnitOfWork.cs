@@ -3,6 +3,7 @@ namespace TaskFlow.Application.Contracts;
 public interface IUnitOfWork
 {
     Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task<IUnitOfWorkTransaction> BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
 }
 
 public interface IUnitOfWorkTransaction : IAsyncDisposable

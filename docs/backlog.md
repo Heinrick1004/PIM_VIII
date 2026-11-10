@@ -20,6 +20,12 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
+## Estado executado até o Dia 3
+
+- **Concluídas:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização) e US04 (gerenciamento de usuários). US03/US04 foram implementadas e exercitadas por HTTP real sobre SQL Server isolado; o bootstrap administrativo também foi testado e é idempotente.
+- **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
+- **Ainda planejadas:** US05–US13, incluindo endpoints de tarefas, histórico HTTP, interfaces, objetos SQL, contêiner, Kubernetes e CI/CD.
+
 ## Plano das três sprints
 
 | Sprint | Período planejado | Objetivo | Backlog selecionado | Revisão prevista |
@@ -36,4 +42,4 @@ Uma história estará pronta quando seus critérios forem demonstrados, o códig
 
 Em cada dia, revisar progresso, impedimentos e capacidade. Ao final de cada sprint, demonstrar o incremento e realizar uma retrospectiva curta. Se houver atraso, reduzir acabamento e abrangência das interfaces antes de comprometer segurança, integridade, verificação ou a veracidade das evidências; renegociar qualquer retirada de requisito com a equipe/orientação.
 
-Dependências principais: US02 sustenta persistência de US04–US07; US03 precede exposição dos casos de negócio; US06–US07 sustentam US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md).
+Dependências principais: US02 sustenta US04–US07; US03 está implementada e precede a exposição dos próximos casos de negócio; US06–US07 sustentam US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md) e as execuções verificadas no [diário](diario-desenvolvimento.md).

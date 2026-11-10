@@ -1,4 +1,26 @@
-# Diagnóstico do ambiente e validação — Dia 1 e Dia 2
+# Diagnóstico do ambiente e validação — Dias 1 a 3
+
+## Situação verificada no Dia 3 — 10/11/2026
+
+| Item | Resultado |
+| --- | --- |
+| Branch/base | `main`, commit-base `bdefa97fb213610670791ff0862f514402961efe`, sincronizado com `origin/main` antes das alterações. |
+| Restore | `dotnet restore TaskFlow.sln`: sucesso. |
+| Build | `dotnet build TaskFlow.sln --no-restore`: sucesso, **0 avisos e 0 erros**. |
+| Suíte completa | `dotnet test TaskFlow.sln`: **52 aprovados, 0 reprovados, 0 ignorados**. |
+| Domínio | `Category=Domain`: **25 aprovados, 0 reprovados, 0 ignorados**. |
+| HTTP/middleware | `Category=Http`: **13 aprovados, 0 reprovados, 0 ignorados**. Os sete novos fluxos de autenticação/usuários atravessam o middleware ASP.NET Core e SQL Server isolado. |
+| SQL Server | `Category=SqlServer`: **19 aprovados, 0 reprovados, 0 ignorados**. Inclui os 11 testes de persistência do Dia 2, os sete testes HTTP integrados e um teste de bootstrap. |
+| Segurança de configuração | `Category=Security`: **2 aprovados, 0 reprovados, 0 ignorados**; chave ausente ou menor que 256 bits é rejeitada. |
+| Categorias | HTTP e SQL Server se sobrepõem nos sete testes integrados de endpoints; por isso, os contadores filtrados não devem ser somados. |
+| Banco de testes | Cada fixture utilizou `TaskFlowIntegrationTests_<GUID>`, criado/aplicado migrations/removido pelo fixture. Nenhum banco temporário permaneceu após os testes. |
+| `TaskFlowDev` | Consulta somente leitura confirmou o mesmo banco, migrations `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults`, e 0 linhas em `Usuarios`, `Tarefas` e `HistoricoTarefas`. Não foram aplicadas migrations nem executadas gravações no Dia 3. |
+| Configuração JWT | `Issuer`/`Audience` são parâmetros de configuração; `SigningKey` deve ser Base64 externo, mínimo 32 bytes. Nenhuma chave JWT real está versionada. |
+| Bootstrap manual | Rotina testada no banco isolado. Não foi executada em `TaskFlowDev`, pois nenhuma senha inicial foi fornecida/escolhida pelo mantenedor. |
+
+Testes HTTP adicionais cobrem login com senha correta/incorreta e e-mail inexistente, hash legado com rehash, claims mínimas, expiração, assinatura adulterada, issuer/audience incorretos, `/me`, 401/403, autorização administrativa, perfil revalidado, cadastro/listagem/paginação/consulta/atualização, e-mail duplicado e proteção do último administrador. O bootstrap SQL provou criação com hash e execução repetida sem duplicar o primeiro administrador.
+
+Não houve alteração de schema, nova migration, `EnsureCreated`, nem execução de script SQL. A API não executa migrations no startup.
 
 ## Situação verificada no Dia 2 — 10/11/2026
 

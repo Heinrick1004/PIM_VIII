@@ -47,13 +47,31 @@ public sealed class Usuario
     }
 
     public Guid Id { get; }
-    public string Nome { get; }
-    public string Email { get; }
+    public string Nome { get; private set; }
+    public string Email { get; private set; }
     /// <summary>
     /// Hash opaco previamente calculado pelo serviço de identidade.
     /// O domínio não recebe a senha original nem implementa seu algoritmo de hash.
     /// A validação aqui garante apenas presença e tamanho, não a origem criptográfica.
     /// </summary>
-    public string PasswordHash { get; }
-    public PerfilUsuario Perfil { get; }
+    public string PasswordHash { get; private set; }
+    public PerfilUsuario Perfil { get; private set; }
+
+    public void UpdateProfile(string nome, string email, PerfilUsuario perfil)
+    {
+        var updated = new Usuario(Id, nome, email, PasswordHash, perfil);
+        Nome = updated.Nome;
+        Email = updated.Email;
+        Perfil = updated.Perfil;
+    }
+
+    public void UpdatePasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash) || passwordHash.Length > PasswordHashMaxLength)
+        {
+            throw new ArgumentException("O hash da senha é obrigatório.", nameof(passwordHash));
+        }
+
+        PasswordHash = passwordHash;
+    }
 }

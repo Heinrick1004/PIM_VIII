@@ -19,10 +19,14 @@ Este é um plano interno de duas semanas, elaborado em 09/11/2026, e não uma de
 | 13 | 21/11, sábado | S3 | Preparar Kubernetes mínimo e CI/CD; executar validação integrada. | Pipeline executado, configuração/probes verificadas e evidência de implantação quando disponível. |
 | 14 | 22/11, domingo | S3 | Reserva para correções; revisar requisitos, documentação e demonstração; retrospectiva S3. | Relatório de verificação, pendências explícitas e roteiro de demonstração. |
 
+## Atualização de execução — 10/11/2026
+
+O incremento de autenticação previsto para o Dia 3 foi antecipado e implementado em 10/11: JWT, hashing, autorização por perfil, bootstrap administrativo explícito, endpoints de usuários, testes e documentação. Isso não altera a data planejada dos dias posteriores nem declara concluídas as funcionalidades ainda pendentes. O bootstrap manual e a demonstração em `TaskFlowDev` dependem de senha escolhida pelo mantenedor e permanecem por executar.
+
 ## Dependências e riscos de prazo
 
 - O Dia 2 depende de acesso a uma instância real de SQL Server. Não substituir persistência por respostas estáticas para apresentar conclusão.
-- O suporte do .NET 8 termina em 10/11/2026; avaliar o .NET 10 já disponível antes de publicar. A base do Dia 1 permanece em .NET 8, conforme solicitado e detalhado na [arquitetura](arquitetura.md).
+- O projeto foi migrado e validado em .NET 10 no Dia 2; não permanece em .NET 8.
 - A autenticação deve preceder a exposição de operações de usuários e tarefas. Os clientes dependem dos contratos autenticados da API.
 - A decisão de schema e a estratégia de auditoria devem preceder migrations e triggers, evitando alterações concorrentes ou registros duplicados.
 - Docker, cluster e credenciais de implantação podem exigir preparação externa. Diretórios e manifests existentes não comprovam implantação; registrar o que foi executado.

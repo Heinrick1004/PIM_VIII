@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -77,6 +78,9 @@ public sealed class ApiEndpointTests
         var paths = payload.RootElement.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/health", out _));
         Assert.True(paths.TryGetProperty("/api/info", out _));
+        Assert.True(payload.RootElement.GetProperty("components")
+            .GetProperty("securitySchemes")
+            .TryGetProperty("Bearer", out _));
     }
 
     [Theory]
@@ -101,6 +105,16 @@ public sealed class ApiEndpointTests
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider());
             });
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Authentication:Jwt:Issuer"] = TestJwtConfiguration.Issuer,
+                    ["Authentication:Jwt:Audience"] = TestJwtConfiguration.Audience,
+                    ["Authentication:Jwt:SigningKey"] = TestJwtConfiguration.SigningKey
+                }));
+            builder.UseSetting("Authentication:Jwt:Issuer", TestJwtConfiguration.Issuer);
+            builder.UseSetting("Authentication:Jwt:Audience", TestJwtConfiguration.Audience);
+            builder.UseSetting("Authentication:Jwt:SigningKey", TestJwtConfiguration.SigningKey);
         });
 
     private sealed class FixedTimeProvider : TimeProvider

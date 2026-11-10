@@ -88,3 +88,36 @@ O teste de concorrência carregou a mesma tarefa em dois `DbContext`s. O primeir
 - Não foram implementados login/JWT, endpoints CRUD de negócio, interfaces Web/Flutter/Desktop, Docker, Kubernetes ou CI/CD.
 - A API ainda expõe somente health e informações; autenticação/autorização e casos de uso devem preceder endpoints com dados.
 - Usuários devem configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório se não usarem `localhost` com autenticação integrada; a conta precisa criar/remover bancos temporários.
+
+## Dia 3 — autenticação JWT e gerenciamento de usuários (implementado em 10/11/2026)
+
+### Implementação
+
+- Adicionado `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.0. A API exige `Authentication:Jwt:Issuer`, `Audience` e chave Base64 externa com pelo menos 256 bits; a chave ausente ou fraca faz a configuração falhar explicitamente. Em Development, `UserSecretsId` permite guardar a chave fora do repositório.
+- Configurado HMAC-SHA256, validação obrigatória de issuer, audience, assinatura e expiração de 60 minutos. JWT contém somente `sub` e `role`. Em cada token validado, a API busca o usuário corrente no banco e constrói a role com o perfil atual, impedindo que privilégio antigo persista após mudança de perfil.
+- Senhas usam `PasswordHasher<Usuario>` do ASP.NET Core Identity, mínimo de 12 e máximo de 128 caracteres, sem senha/hash nas respostas. Login atualiza hashes que retornem `SuccessRehashNeeded`.
+- Login limitado a 10 tentativas por minuto por IP. `/health` e `/api/info` seguem públicos; `GET /api/auth/me` requer token e `/api/users` exige Administrador.
+- Adicionados cadastro/listagem paginada/consulta/atualização administrativa de usuários, validação de domínio, conversão de violações únicas para 409 e bloqueio de rebaixamento do último administrador em transação serializável. Não há exclusão de usuários.
+- O bootstrap é um comando explícito `--bootstrap-admin`, restrito a Development e ao catálogo `TaskFlowDev`; solicita senha interativamente sem eco, verifica administradores existentes e não aplica migrations. Testado em banco SQL isolado; não executado em `TaskFlowDev`.
+- Nenhuma migration/schema foi modificada. Swagger ganhou esquema Bearer e continua habilitado somente em Development.
+
+### Validação final real
+
+| Verificação | Aprovados | Reprovados | Ignorados |
+| --- | ---: | ---: | ---: |
+| Restore `dotnet restore TaskFlow.sln` | Sucesso | — | — |
+| Build `dotnet build TaskFlow.sln --no-restore` | 0 avisos | 0 erros | — |
+| Domínio (`Category=Domain`) | 25 | 0 | 0 |
+| HTTP/middleware (`Category=Http`) | 13 | 0 | 0 |
+| SQL Server (`Category=SqlServer`) | 19 | 0 | 0 |
+| Segurança (`Category=Security`) | 2 | 0 | 0 |
+| Suíte completa (`dotnet test TaskFlow.sln`) | **52** | **0** | **0** |
+
+Os grupos HTTP e SQL Server se sobrepõem nos sete novos testes de endpoints que executam com SQL Server real; os resultados categorizados, portanto, não devem ser somados. A suíte completa e cada fixture filtrado utilizaram exclusivamente bancos temporários `TaskFlowIntegrationTests_<GUID>` para testes de persistência. Os fixtures os removeram após a execução. `TaskFlowDev` foi consultado apenas em leitura depois da validação: as três migrations existentes permanecem aplicadas e as três tabelas continuam com zero registros. Sem migration, alteração ou gravação neste dia.
+
+### Pendências e operação manual
+
+- Configurar localmente uma chave JWT com User Secrets/ambiente e executar o bootstrap somente quando o mantenedor escolher nome/e-mail/senha. O procedimento e os comandos estão no [README](../README.md); nenhuma credencial foi inventada.
+- O fluxo login → `/me` → CRUD → funcionário 403 foi exercitado por testes HTTP contra SQL isolado, mas não foi demonstrado manualmente no Swagger de `TaskFlowDev`; não havia credenciais fornecidas para isso.
+- Permanecem pendentes endpoints de tarefas, histórico HTTP, interfaces web/mobile/desktop, Docker, Kubernetes e CI/CD.
+- Restore, build, categorias, preservação do banco e resultados estão detalhados em [ambiente.md](ambiente.md).

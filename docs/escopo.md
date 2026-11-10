@@ -12,7 +12,7 @@ O MVP deverá permitir que administradores distribuam trabalho e que funcionári
 
 **Dia 1:** solução .NET 8 em quatro camadas, entidades e validações fundamentais, API com `GET /health` e `GET /api/info`, testes básicos, schema SQL de referência e documentação. Resultados executados são registrados no diário e no diagnóstico do ambiente.
 
-**MVP das duas semanas, ainda planejado:** persistência SQL Server com uma estratégia oficial de schema, autenticação e autorização reais, operações de tarefas e usuários, histórico transacional, concorrência otimista, web responsiva, clientes Flutter e desktop mínimos, procedures/functions/triggers/transações, Docker, Kubernetes e CI/CD.
+**Estado após Dia 3:** persistência SQL Server com migrations, autenticação JWT e autorização por perfil, gerenciamento administrativo de usuários, bootstrap explícito e testes reais em banco isolado foram implementados. Operações de tarefas, histórico transacional HTTP, concorrência de tarefas, clientes, procedures/functions/triggers, Docker, Kubernetes e CI/CD continuam planejados.
 
 Ficam fora do MVP: microserviços, CQRS, MediatR, múltiplas empresas, chat, anexos, notificações externas, recuperação de senha por e-mail, modo offline e relatórios analíticos avançados. Não haverá endpoints de sucesso para operações ainda não implementadas.
 
@@ -29,38 +29,41 @@ Ficam fora do MVP: microserviços, CQRS, MediatR, múltiplas empresas, chat, ane
 
 Os critérios abaixo descrevem o comportamento esperado do MVP. A coluna de situação diferencia a base do Dia 1 de funcionalidades futuras.
 
-| ID | Requisito e critério de aceite | Disciplina | Situação no Dia 1 |
+| ID | Requisito e critério de aceite | Disciplina | Situação verificada |
 | --- | --- | --- | --- |
-| RF01 | Autenticar usuários e aplicar os perfis Administrador e Funcionario. Credenciais inválidas devem ser rejeitadas; rotas protegidas devem devolver 401/403 conforme o caso. | NET, BD | Perfis modelados; autenticação e autorização planejadas |
-| RF02 | Permitir que somente administradores cadastrem, consultem e alterem usuários. Nome e e-mail devem ser válidos; e-mail duplicado deve ser rejeitado; senhas devem ser transformadas em hash antes da persistência. | NET, BD | Entidade e unicidade SQL de referência; gestão planejada |
-| RF03 | Permitir ao administrador cadastrar e atribuir tarefas com título de até 200 caracteres, descrição opcional, prioridade válida, prazo UTC opcional e criador identificado. Nova tarefa deve iniciar Pendente. | NET, BD | Modelo e validações; caso de uso planejado |
+| RF01 | Autenticar usuários e aplicar os perfis Administrador e Funcionario. Credenciais inválidas devem ser rejeitadas; rotas protegidas devem devolver 401/403 conforme o caso. | NET, BD | Implementado e testado com middleware JWT real; perfil revalidado no banco |
+| RF02 | Permitir que somente administradores cadastrem, consultem e alterem usuários. Nome e e-mail devem ser válidos; e-mail duplicado deve ser rejeitado; senhas devem ser transformadas em hash antes da persistência. | NET, BD | Endpoints implementados; senha hasheada; CRUD sem exclusão; SQL isolado testado |
+| RF03 | Permitir ao administrador cadastrar e atribuir tarefas com título de até 200 caracteres, descrição opcional, prioridade válida, prazo UTC opcional e criador identificado. Nova tarefa deve iniciar Pendente. | NET, BD | Domínio e persistência existem; endpoint/caso de uso HTTP pendente |
 | RF04 | Consultar tarefas por status e responsável, com paginação e visibilidade conforme a matriz de permissões. Uma consulta não pode expor tarefas de outros funcionários sem vínculo permitido. | NET, BD | Planejado |
-| RF05 | Permitir alterações conforme o perfil. Status deve ser Pendente, EmAndamento ou Concluida; prioridade deve ser Baixa, Media ou Alta. Uma versão desatualizada deve produzir conflito sem sobrescrever a versão atual. | NET, BD | Enums e validações; fluxo persistido e conflito HTTP planejados |
-| RF06 | Registrar criação e alterações relevantes de tarefas, identificando autor, ação, data UTC e descrição. A mudança e o registro devem ser confirmados na mesma transação; o histórico não pode ser editado pelo cliente. | NET, BD | Modelo do histórico; persistência transacional planejada |
+| RF05 | Permitir alterações conforme o perfil. Status deve ser Pendente, EmAndamento ou Concluida; prioridade deve ser Baixa, Media ou Alta. Uma versão desatualizada deve produzir conflito sem sobrescrever a versão atual. | NET, BD | Persistência/RowVersion testados no Dia 2; endpoints e resposta HTTP de conflito pendentes |
+| RF06 | Registrar criação e alterações relevantes de tarefas, identificando autor, ação, data UTC e descrição. A mudança e o registro devem ser confirmados na mesma transação; o histórico não pode ser editado pelo cliente. | NET, BD | Persistência transacional testada no Dia 2; integração com API de tarefas pendente |
 | RF07 | Disponibilizar web responsiva e clientes mínimos Flutter e desktop C#, consumindo a mesma API. Cada cliente deve permitir autenticação, consulta das tarefas permitidas e mudança de status de uma tarefa atribuída. | NET, CLOUD | Diretórios reservados; clientes planejados |
 | RF08 | Expor `GET /health` com status e timestamp UTC e `GET /api/info` com nome, versão e descrição. Ambos devem responder HTTP 200 sem exigir banco no Dia 1. | NET, CLOUD | API mínima do Dia 1 |
 
 ## Requisitos não funcionais
 
-| ID | Requisito e critério de verificação | Disciplina | Situação no Dia 1 |
+| ID | Requisito e critério de verificação | Disciplina | Situação verificada |
 | --- | --- | --- | --- |
-| RNF01 | Manter Domain independente, Application dependente de Domain, Infrastructure dependente de Application/Domain e Api dependente de Application/Infrastructure. A solução deve compilar com nullable habilitado. | NET | Base arquitetural do Dia 1 |
-| RNF02 | Não versionar segredos nem armazenar senhas em texto puro. Antes de disponibilizar rotas protegidas, implementar hashing apropriado, validação de credenciais e autorização no servidor; usar HTTPS em implantação. | NET, CLOUD | Política e campo de hash; autenticação futura |
-| RNF03 | Usar SQL Server com PKs, FKs, e-mail único e constraints de domínio. A estratégia de schema deve ser única; alterações de tarefa e histórico devem ter rollback conjunto em falha. | BD | Script de referência; execução e transações futuras |
-| RNF04 | Tratar datas de negócio em UTC e usar `rowversion` para concorrência otimista. Validar datas no domínio e testar dois escritores sobre a mesma tarefa na etapa de persistência. | NET, BD | Datas e versão modeladas; concorrência persistida futura |
+| RNF01 | Manter Domain independente, Application dependente de Domain, Infrastructure dependente de Application/Domain e Api dependente de Application/Infrastructure. A solução deve compilar com nullable habilitado. | NET | Arquitetura mantida e solução .NET 10 compilada |
+| RNF02 | Não versionar segredos nem armazenar senhas em texto puro. Antes de disponibilizar rotas protegidas, implementar hashing apropriado, validação de credenciais e autorização no servidor; usar HTTPS em implantação. | NET, CLOUD | Segredo externo; hashing e autorização implementados; HTTPS de implantação pendente |
+| RNF03 | Usar SQL Server com PKs, FKs, e-mail único e constraints de domínio. A estratégia de schema deve ser única; alterações de tarefa e histórico devem ter rollback conjunto em falha. | BD | Migrations EF Core e constraints implantadas; transações testadas em SQL Server |
+| RNF04 | Tratar datas de negócio em UTC e usar `rowversion` para concorrência otimista. Validar datas no domínio e testar dois escritores sobre a mesma tarefa na etapa de persistência. | NET, BD | UTC/RowVersion e concorrência otimista testados em SQL Server |
 | RNF05 | Tornar a web utilizável a partir de 360 px e em desktop, com rótulos nos campos e navegação por teclado. Os clientes devem apresentar erros da API e não simular sucesso. | NET | Planejado |
-| RNF06 | Executar restore, build e testes de validação, contratos HTTP e, após persistência, integração SQL. Registrar falhas e limitações reais; nenhuma alteração deve integrar o pipeline com verificações obrigatórias reprovadas. | NET, CLOUD | Verificações do Dia 1 registradas separadamente |
+| RNF06 | Executar restore, build e testes de validação, contratos HTTP e, após persistência, integração SQL. Registrar falhas e limitações reais; nenhuma alteração deve integrar o pipeline com verificações obrigatórias reprovadas. | NET, CLOUD | Restore/build/testes de domínio, HTTP e SQL Server executados e registrados |
 | RNF07 | Preparar Docker, manifests Kubernetes mínimos e CI/CD com segredos externos. Após implementação, comprovar build da imagem, probes e execução do pipeline sem credenciais no código. | CLOUD | Diretórios reservados; automação planejada |
 | RNF08 | Manter histórias priorizadas e rastreáveis a RF/RNF, critérios de aceite, três sprints e diário de evidências. Revisar escopo e pendências ao final de cada sprint. | AGIL | Documentação de planejamento do Dia 1 |
 
-## Matriz de permissões planejada
+## Matriz de permissões vigente
 
-Esta matriz orientará os casos de uso e testes de autorização. Não há autenticação nem endpoints de tarefas/usuários implementados no Dia 1.
+As rotas implementadas aplicam esta matriz na API. Operações de tarefas ainda não estão expostas.
 
 | Operação | Administrador | Funcionario | Sem autenticação |
 | --- | --- | --- | --- |
 | Consultar `/health` e `/api/info` | Permitido | Permitido | Permitido |
+| `POST /api/auth/login` | Permitido | Permitido | Permitido; credenciais inválidas recebem 401 |
+| `GET /api/auth/me` | Própria identidade do token | Própria identidade do token | 401 |
 | Cadastrar, listar e alterar usuários e perfis | Permitido | Negado | Negado |
+| Bootstrap do primeiro administrador | Comando local explicitamente executado; apenas Development/TaskFlowDev | Não aplicável | Não aplicável |
 | Cadastrar e atribuir tarefa | Permitido; criador é o usuário autenticado | Negado | Negado |
 | Listar/ver tarefa e seu histórico | Todas as tarefas | Somente se criador ou responsável atual | Negado |
 | Alterar título, descrição, prioridade, prazo ou responsável | Qualquer tarefa | Negado | Negado |
@@ -72,6 +75,8 @@ Esta matriz orientará os casos de uso e testes de autorização. Não há auten
 Reatribuição remove do antigo responsável o acesso por responsabilidade; o vínculo de criador continua válido. Funcionário que apenas criou uma tarefa pode consultá-la, mas não alterar seu status se não for o responsável atual. No MVP, a criação é administrativa; a regra de criador também mantém coerência para usuários cujo perfil mude posteriormente. Administradores podem reabrir tarefas; responsáveis podem transitar entre os três status válidos, sempre com registro de alteração efetiva.
 
 Nenhum cliente terá acesso direto ao banco. A API deverá verificar permissões em cada operação; ocultar botões na interface não substitui essa validação. Unicidade de e-mail depende da persistência e da constraint SQL, não apenas de uma consulta prévia. Hashes nunca devem compor respostas públicas ou registros de auditoria.
+
+JWT exige issuer, audience e chave HMAC externa em Base64 com ao menos 256 bits; a expiração é de 60 minutos. O perfil é revalidado no banco em cada requisição protegida. Login possui rate limit de 10 tentativas por minuto por IP. Ver [instruções de configuração](../README.md#segredo-jwt-e-primeiro-administrador-powershell) e os resultados em [ambiente](ambiente.md).
 
 ## Referências internas
 

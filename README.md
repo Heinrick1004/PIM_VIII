@@ -4,19 +4,19 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 1 — 09/11/2026:** solução .NET 8 com domínio validado, metadados da aplicação por DI, API mínima, testes xUnit, SQL Server de referência e planejamento. Não há persistência conectada, autenticação, CRUD ou clientes implementados. Web, desktop, Flutter, Docker, Kubernetes e CI/CD estão planejados para as próximas etapas.
+**Dia 2 — 10/11/2026:** solução migrada para .NET 10 com EF Core 10, SQL Server, migrations, repositórios e unidade transacional. O banco existente `TaskFlowDev` foi atualizado sem apagar/recriar o banco; não há ainda autenticação nem CRUD HTTP. Web, desktop, Flutter, Docker, Kubernetes e CI/CD continuam fora do escopo atual.
 
-A validação desta entrega terminou com **30 testes aprovados**, build sem avisos/erros e respostas HTTP reais dos endpoints. Os comandos e limites estão em [ambiente](docs/ambiente.md) e no [diário](docs/diario-desenvolvimento.md).
+A validação real do Dia 2 terminou com **42 testes aprovados, 0 reprovados e 0 ignorados**: 25 de domínio, 6 de API/HTTP e 11 de integração em SQL Server real. Build: 0 avisos e 0 erros. Os resultados verificáveis estão em [ambiente](docs/ambiente.md), [modelo de dados](docs/modelo-dados.md) e [diário](docs/diario-desenvolvimento.md).
 
 ## Tecnologias e requisitos
 
-- SDK **.NET 8.0.4xx**, runtime ASP.NET Core 8 e Git. `global.json` seleciona o último patch instalado da faixa 8.0.400; este ambiente usou 8.0.427.
-- ASP.NET Core Minimal API, OpenAPI/Swagger e xUnit com testes de integração por `WebApplicationFactory`.
+- SDK **.NET 10 LTS**, runtime ASP.NET Core 10 e Git. `global.json` seleciona 10.0.403, que está instalado no ambiente.
+- ASP.NET Core Minimal API, Entity Framework Core 10, OpenAPI/Swagger e xUnit.
 - Acesso ao NuGet para o primeiro restore, ou os pacotes necessários em cache.
-- SQL Server será necessário para a persistência futura. A API do Dia 1 inicia sem banco e sem connection string.
+- SQL Server local em desenvolvimento real, usando a base `TaskFlowDev` com migrations EF Core e conexão por autenticação integrada.
 - Flutter e Docker não são requisitos para executar os projetos atuais.
 
-O .NET 8 foi mantido conforme a base solicitada. O suporte oficial termina em **10/11/2026**; a reavaliação do .NET 10 já instalado está prevista para o Dia 2, antes da implantação. [Política de suporte da Microsoft](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core).
+A solução foi migrada para **.NET 10 LTS** e validada com SDK 10.0.403 instalado no ambiente. A estratégia de persistência usa EF Core 10 e migrations oficiais em SQL Server local, sem segredos versionados no repositório. [Política de suporte da Microsoft](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core).
 
 ## Organização
 
@@ -26,14 +26,14 @@ src/
   TaskFlow.Api/              # HTTP, DI e Swagger
   TaskFlow.Application/      # Informações da aplicação; casos de uso futuros
   TaskFlow.Domain/           # Entidades, enums e invariantes
-  TaskFlow.Infrastructure/   # Projeto para persistência futura
+  TaskFlow.Infrastructure/   # EF Core, migrations e repositórios SQL Server
   TaskFlow.Web/              # Reservado
   TaskFlow.Desktop/          # Reservado
 mobile/                     # Reservado para Flutter
 database/scripts/001_schema.sql
 infra/docker/               # Reservado
 infra/k8s/                  # Reservado
-tests/TaskFlow.Tests/        # 25 casos de domínio e 5 de API
+tests/TaskFlow.Tests/        # 25 domínio, 6 API/HTTP e 10 SQL Server
 docs/                       # Requisitos, decisões, planejamento e evidências
 ```
 
@@ -47,7 +47,7 @@ Na raiz do repositório, em PowerShell ou outro terminal com o SDK disponível:
 dotnet --version
 dotnet restore TaskFlow.sln
 dotnet build TaskFlow.sln --no-restore
-dotnet test TaskFlow.sln --no-build --no-restore
+dotnet test TaskFlow.sln
 dotnet run --project src/TaskFlow.Api --no-build --no-restore --launch-profile http
 ```
 
@@ -67,13 +67,21 @@ Invoke-RestMethod http://localhost:5046/api/info
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-`/health` é uma verificação de vida do processo HTTP; não verifica banco nem dependências externas. Os testes de integração usam o host real da aplicação em memória; a execução por HTTP/TCP também foi verificada separadamente. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+`/health` é uma verificação de vida do processo HTTP; não verifica banco nem dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
 
 ## Banco e configuração
 
-O [schema SQL](database/scripts/001_schema.sql) é **referência técnica**, não foi executado e não cria banco. Contém as três tabelas, constraints, índice e `rowversion`, com transação e proteção contra aplicação sobre objetos existentes ou bancos de sistema. A preferência é adotar **EF Core migrations como única estratégia oficial no Dia 2**. Não executar SQL e migration inicial equivalentes no mesmo banco. Detalhes no [modelo de dados](docs/modelo-dados.md).
+**EF Core migrations são o único mecanismo oficial de criação/evolução do schema.** `database/scripts/001_schema.sql` permanece somente como referência e não foi executado. `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`; não se usa `EnsureCreated()` nem migração automática no startup. O banco existente foi preservado.
 
-Não há segredos nem variáveis adicionais obrigatórias nesta etapa; por isso não há `.env.example`. A configuração atual contém apenas logging e hosts. Senhas devem chegar ao campo `PasswordHash` já transformadas pelo componente apropriado, a ser implementado com a autenticação. Nenhuma senha ou usuário inicial é fornecido. Para conexões futuras, usar configuração externa/segredos locais e nunca versionar credenciais.
+Em Development, a API lê `ConnectionStrings:TaskFlow` de `src/TaskFlow.Api/appsettings.Development.json` e usa autenticação integrada para `TaskFlowDev`; não há senha no repositório. Ambientes sem essa configuração falham explicitamente. A suíte SQL cria um banco temporário `TaskFlowIntegrationTests_<GUID>` por execução, aplica migrations e remove apenas esse banco gerado. Nunca usa `TaskFlowDev`. Para outro SQL Server, defina `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório; a conta precisa de permissão para criar e remover bancos de teste. Credenciais de usuários e hashes não são fornecidos.
+
+Para executar testes por categoria:
+
+```powershell
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Domain"
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Http"
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=SqlServer"
+```
 
 ## Documentação e próximos passos
 
@@ -85,4 +93,4 @@ Não há segredos nem variáveis adicionais obrigatórias nesta etapa; por isso 
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-No Dia 2: decidir a versão suportada do .NET, confirmar a estratégia de schema, configurar EF Core/SQL Server sem segredos versionados e validar a primeira migration, unicidade, FKs e concorrência em banco de desenvolvimento real. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Próximas etapas: casos de uso e endpoints de negócio, autenticação/autorização e clientes planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.

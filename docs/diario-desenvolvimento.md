@@ -48,3 +48,43 @@ O commit local solicitado é `feat: initialize TaskFlow solution and day-one doc
 3. Preparar banco de desenvolvimento explicitamente identificado e conexão por configuração externa, sem credenciais versionadas.
 4. Aplicar a primeira migration revisada e testar e-mail duplicado, FKs, rowversion e rollback conjunto de tarefa/histórico conforme os casos de uso forem introduzidos.
 5. Refinar backlog com os resultados; autenticação e endpoints de negócio permanecem na sequência planejada, sem ampliar o escopo do Dia 1.
+
+## Dia 2 — 10/11/2026: EF Core, migrations e persistência real
+
+### Implementação e decisões
+
+- Confirmados novamente SDK 10.0.403 e SQL Server local 17.0.1145.4. Projetos permanecem em `net10.0`; EF Core, SQL Server provider, `DbContext`, configurações Fluent API e registro de Infrastructure na API estão ativos.
+- A conexão de Development aponta explicitamente para `TaskFlowDev` por autenticação integrada. Um teste API comprovou `CanConnectAsync` nesse banco. Foi conferido o banco existente, suas migrations e contagens (zero registros nas três tabelas) antes de atualizar. Sem `EnsureCreated`, banco substituto, `DROP DATABASE` ou migração automática no startup.
+- Migrations oficiais: `InitialCreate` preexistente, seguida por `HardenPersistenceMappings` e `DatabaseDefaults`. A estratégia única de schema é EF Core migrations; `database/scripts/001_schema.sql` continua referência e não foi executado.
+- Corrigido o mapeamento de RowVersion: EF acessa `_rowVersion` pelo campo, persiste na coluna `Versao NOT NULL`, lê token de 8 bytes e configura concorrência otimista. SQL Server exige remover/recriar a coluna rowversion para corrigir nulabilidade; a migration preserva linhas/todos os demais dados e gera novo token. `TaskFlowDev` estava vazio quando a migration foi aplicada.
+- Configurados collation CI_AS de e-mail, defaults planejados para IDs/enums/datas, conversores UTC e checks/relacionamentos sem cascade. Paginação desempata por Id; limites negativos/zero são rejeitados.
+- Repositórios específicos mantidos. Contrato `IUnitOfWork` compartilha o `TaskFlowDbContext` scoped e envolve os `SaveChangesAsync` dos repositórios para commit/rollback de tarefa e histórico. Violações SQL 2601/2627 e 547 são expostas como `PersistenceConstraintException`; conflitos rowversion continuam `DbUpdateConcurrencyException`.
+- Configuração ausente para connection string falha explicitamente em vez de selecionar banco por fallback.
+
+### Integração SQL Server e evidência
+
+Os testes criam o banco temporário **`TaskFlowIntegrationTests_<GUID>`**, aplicam todas as migrations, limpam dados somente nas próprias tabelas entre casos e removem somente o banco temporário criado pelo fixture. A última execução SQL filtrada usou `TaskFlowIntegrationTests_f05850514fb440af9e70301c85493240`; a suíte completa final usou `TaskFlowIntegrationTests_fd03a55e59f54bf096103f6a555dfd0e`. `TaskFlowDev` não é alvo dos testes de persistência. O teste API apenas confirma o nome e abre conexão real ao banco de desenvolvimento, sem escrita.
+
+| Grupo/execução | Aprovados | Reprovados | Ignorados |
+| --- | ---: | ---: | ---: |
+| Domínio (`Category=Domain`) | 25 | 0 | 0 |
+| HTTP/API (`Category=Http`) | 6 | 0 | 0 |
+| SQL Server (`Category=SqlServer`) | 11 | 0 | 0 |
+| Suíte completa (`dotnet test TaskFlow.sln`) | 42 | 0 | 0 |
+
+O teste de concorrência carregou a mesma tarefa em dois `DbContext`s. O primeiro persistiu uma nova versão; o segundo recebeu `DbUpdateConcurrencyException`, e a verificação independente confirmou que o estado do primeiro escritor permaneceu. O teste de rollback atualizou a tarefa, tentou gravar histórico com FK inválida e fez rollback; leitura em contexto novo confirmou o status original e zero histórico. O teste de commit confirmou tarefa+histórico juntos e repetição do mesmo status não produziu segundo evento. Outro teste exerceu os defaults de Id, status, prioridade e datas diretamente no SQL Server.
+
+### Validação do build e do ambiente
+
+- `dotnet restore TaskFlow.sln`: sucesso.
+- `dotnet build TaskFlow.sln --no-restore --nologo`: sucesso, 0 avisos, 0 erros.
+- `dotnet test TaskFlow.sln`: 42 aprovados, 0 reprovados, 0 ignorados.
+- As migrations corretivas foram testadas inicialmente em banco temporário e então aplicadas ao banco de desenvolvimento previamente confirmado, sem script SQL manual. Verificação posterior confirmou o histórico, collation, `rowversion NOT NULL` e tabelas.
+- A suíte SQL não foi ignorada nem substituída por provider em memória. Se SQL Server/permissões estiverem indisponíveis, os testes falham explicitamente.
+- `dotnet --info`, estado dos bancos, conexão API, categorização, erros corrigidos, verificação de credenciais e comandos finais estão registrados em [ambiente.md](ambiente.md).
+
+### Escopo e pendências
+
+- Não foram implementados login/JWT, endpoints CRUD de negócio, interfaces Web/Flutter/Desktop, Docker, Kubernetes ou CI/CD.
+- A API ainda expõe somente health e informações; autenticação/autorização e casos de uso devem preceder endpoints com dados.
+- Usuários devem configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório se não usarem `localhost` com autenticação integrada; a conta precisa criar/remover bancos temporários.

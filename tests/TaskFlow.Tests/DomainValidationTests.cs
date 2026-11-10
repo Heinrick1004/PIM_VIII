@@ -3,6 +3,7 @@ using TaskFlow.Domain.Enums;
 
 namespace TaskFlow.Tests;
 
+[Trait("Category", "Domain")]
 public sealed class DomainValidationTests
 {
     // Valor sintético opaco; estes testes não implementam um hasher nem autenticação.

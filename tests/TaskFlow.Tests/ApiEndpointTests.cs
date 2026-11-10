@@ -2,11 +2,16 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using TaskFlow.Application.Contracts;
+using TaskFlow.Infrastructure.Data;
+using TaskFlow.Infrastructure.Data.Repositories;
 
 namespace TaskFlow.Tests;
 
+[Trait("Category", "Http")]
 public sealed class ApiEndpointTests
 {
     private static readonly DateTimeOffset Instant = new(2026, 11, 9, 12, 0, 0, TimeSpan.Zero);
@@ -41,6 +46,22 @@ public sealed class ApiEndpointTests
         Assert.Equal("0.1.0", payload.RootElement.GetProperty("version").GetString());
         Assert.Equal("API inicial do sistema de gestão de tarefas internas da Alunos Tech.",
             payload.RootElement.GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public async Task Development_RegistraPersistenciaComTaskFlowDevSemAbrirConexao()
+    {
+        await using var factory = CreateFactory("Development");
+        using var scope = factory.Services.CreateScope();
+
+        var context = scope.ServiceProvider.GetRequiredService<TaskFlowDbContext>();
+
+        Assert.Equal("TaskFlowDev", context.Database.GetDbConnection().Database);
+        Assert.True(await context.Database.CanConnectAsync());
+        Assert.IsType<UsuarioRepository>(scope.ServiceProvider.GetRequiredService<IUsuarioRepository>());
+        Assert.IsType<TarefaRepository>(scope.ServiceProvider.GetRequiredService<ITarefaRepository>());
+        Assert.IsType<HistoricoTarefaRepository>(scope.ServiceProvider.GetRequiredService<IHistoricoTarefaRepository>());
+        Assert.IsType<TaskFlowUnitOfWork>(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
     }
 
     [Fact]

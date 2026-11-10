@@ -1,6 +1,6 @@
-# Modelo de dados — Dia 1
+# Modelo de dados — Dia 2
 
-Referência: 09/11/2026. O domínio C# e o esquema SQL Server estão preparados; não há persistência conectada à API, migrations aplicadas, CRUD ou autenticação nesta etapa. O script foi revisado estaticamente e não foi executado em uma instância SQL Server.
+Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. Não há endpoints de CRUD nem autenticação.
 
 ## Relacionamentos
 
@@ -48,44 +48,46 @@ Os nomes das entidades são `Usuario`, `Tarefa` e `HistoricoTarefa`; as tabelas 
 
 | Tabela/campo | Tipo SQL Server | Regra |
 | --- | --- | --- |
-| Todas: `Id` | `uniqueidentifier` | PK, não aceita GUID vazio. C# recebe um `Guid` explícito; SQL tem `NEWSEQUENTIALID()` como default quando o ID é omitido. |
+| Todas: `Id` | `uniqueidentifier` | PK, não aceita GUID vazio. O domínio recebe um `Guid`; SQL usa `NEWSEQUENTIALID()` como default se omitido. |
 | Usuarios: `Nome` | `nvarchar(120)` | Obrigatório e não vazio após remover espaços externos. Domínio usa `Trim()`. |
 | Usuarios: `Email` | `nvarchar(254)` | Obrigatório e único, sem espaços externos. Domínio valida formato e normaliza com `Trim().ToLowerInvariant()`. |
 | Usuarios: `PasswordHash` | `nvarchar(512)` | Obrigatório e não vazio. Recebe somente um hash produzido pelo futuro serviço de senhas; não é uma senha nem deve aparecer em respostas ou logs. |
 | Usuarios: `Perfil` | `tinyint` | `1 = Administrador`; `2 = Funcionario`. Sem default para exigir escolha explícita. |
 | Tarefas: `Titulo` | `nvarchar(200)` | Obrigatório, de 1 a 200 unidades após `Trim()` no domínio. |
 | Tarefas: `Descricao` | `nvarchar(max)` | Opcional; texto livre. Limites de requisição serão definidos no CRUD. |
-| Tarefas: `Status` | `tinyint` | `1 = Pendente` (default), `2 = EmAndamento`, `3 = Concluida`. |
-| Tarefas: `Prioridade` | `tinyint` | `1 = Baixa`, `2 = Media` (default), `3 = Alta`. |
-| Tarefas: `CriadaEmUtc` | `datetime2(7)` | Obrigatória, default `SYSUTCDATETIME()`. |
+| Tarefas: `Status` | `tinyint` | `1 = Pendente` (default), `2 = EmAndamento`, `3 = Concluida`; conversão explícita do enum. |
+| Tarefas: `Prioridade` | `tinyint` | `1 = Baixa`, `2 = Media` (default), `3 = Alta`; conversão explícita do enum. |
+| Tarefas: `CriadaEmUtc` | `datetime2(7)` | Obrigatória, default `SYSUTCDATETIME()`; leitura remarca `DateTimeKind.Utc`. |
 | Tarefas: `PrazoUtc` | `datetime2(7)` | Opcional; domínio exige UTC quando informada. Não há restrição de prazo posterior à criação nesta etapa. |
 | Tarefas: `CriadorId` | `uniqueidentifier` | FK obrigatória para Usuarios. |
 | Tarefas: `ResponsavelId` | `uniqueidentifier` | FK opcional para Usuarios. |
-| Tarefas: `Versao` | `rowversion` | Gerada pelo SQL Server; mapeamento futuro para `Tarefa.RowVersion`. |
+| Tarefas: `Versao` | `rowversion NOT NULL` | Gerada pelo SQL Server; mapeada ao campo privado `_rowVersion` e à propriedade de leitura `Tarefa.RowVersion`. |
 | HistoricoTarefas: `TarefaId` | `uniqueidentifier` | FK obrigatória para Tarefas. |
 | HistoricoTarefas: `UsuarioId` | `uniqueidentifier` | FK obrigatória para Usuarios. |
 | HistoricoTarefas: `Acao` | `nvarchar(80)` | Obrigatória, até 80 unidades; identifica a alteração. |
-| HistoricoTarefas: `DataUtc` | `datetime2(7)` | Obrigatória, default `SYSUTCDATETIME()`. |
+| HistoricoTarefas: `DataUtc` | `datetime2(7)` | Obrigatória, default `SYSUTCDATETIME()`; leitura remarca `DateTimeKind.Utc`. |
 | HistoricoTarefas: `Descricao` | `nvarchar(1000)` | Opcional, até 1.000 unidades; detalhes da alteração. |
 
 O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao filtro combinado planejado. A consulta somente por responsável deverá ser medida antes de adicionar outro índice. PKs e a unicidade do e-mail também geram seus índices correspondentes.
 
 ## Decisões de consistência
 
-- **E-mail único:** a coluna usa `Latin1_General_100_CI_AS`, independente da collation padrão do banco, para impedir duplicidade por diferença entre maiúsculas e minúsculas. A aplicação normaliza e valida o formato; a constraint `UNIQUE` decide a unicidade inclusive sob concorrência. O domínio isolado não consulta usuários existentes. A camada de aplicação futura deverá converter violação de unicidade em erro de negócio.
-- **UTC:** o domínio exige `DateTimeKind.Utc`. `datetime2` não guarda fuso nem `Kind`; a persistência futura deverá gravar UTC e marcar o valor lido como UTC. Os defaults usam `SYSUTCDATETIME()`. Não converter datas usando o fuso local do servidor.
-- **Concorrência:** `rowversion` é um token binário de 8 bytes gerado a cada escrita, sem significado de data/hora. No domínio, `RowVersion` é `null` em uma entidade nova ou tem 8 bytes em uma entidade persistida. O futuro mapeamento EF usará `IsRowVersion()`; atualizações deverão comparar a versão lida e tratar conflito, sem sobrescrever silenciosamente. Essa integração ainda não está implementada. [Referência oficial do SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/data-types/rowversion-transact-sql?view=sql-server-ver17).
-- **Histórico:** as mutações de título, status e prioridade do domínio exigem ator e data UTC, retornando `HistoricoTarefa` quando há mudança. Repetir o mesmo valor não produz histórico. A camada de aplicação futura persistirá tarefa e histórico na mesma transação e derivará o ator da identidade autenticada. Criação, atribuição, descrição e prazo deverão ganhar o mesmo tratamento quando seus casos de uso forem implementados.
+- **E-mail único:** a coluna usa `Latin1_General_100_CI_AS`, independente da collation do banco. A entidade normaliza e valida; índice único e collation do SQL impedem duplicidade inclusive sob concorrência e quando há diferença de maiúsculas/minúsculas. `TaskFlowDbContext` converte violações únicas/FK/check em `PersistenceConstraintException` com uma categoria segura, sem embutir detalhes do SQL no texto.
+- **UTC:** o domínio exige `DateTimeKind.Utc`. `datetime2` não guarda fuso nem `Kind`; conversores de valor persistem o relógio UTC e reconstituem `DateTimeKind.Utc` na leitura. Defaults usam `SYSUTCDATETIME()`. Não converter valores usando o fuso local do servidor.
+- **Concorrência:** `rowversion` é um token binário obrigatório de 8 bytes, gerado pelo SQL Server e configurado como concurrency token. EF usa o campo privado `_rowVersion`; o getter retorna cópia defensiva. A atualização envia a versão original; conflito resulta em `DbUpdateConcurrencyException` e não sobrescreve a primeira atualização. Testes SQL validam cópia, token novo e conflito concorrente com dois `DbContext`s. [Referência oficial do SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/data-types/rowversion-transact-sql?view=sql-server-ver17).
+- **Histórico e atomicidade:** as mutações de título, status e prioridade exigem ator/data UTC e retornam um evento apenas quando há mudança. Repetir o mesmo valor retorna `null`. `IUnitOfWork` envolve os `SaveChangesAsync` dos repositórios na mesma transação e permite commit/rollback do agregado tarefa+histórico; teste real cobre commit único, duplicação evitada por mudança sem efeito e rollback depois de falha FK. Autoria autenticada ainda aguarda autenticação futura.
 - **Autorização:** perfis são dados de domínio; a existência da coluna não implementa controle de acesso. A matriz de permissões planejadas está em [escopo.md](escopo.md). SQL de referência não aplica autorização por usuário final.
 - **Validação:** `CHECK` restringe enums, campos obrigatórios e GUIDs vazios; FKs garantem referências existentes. A validação C# de espaços e e-mail é mais completa que as verificações básicas SQL. O banco não reconhece se uma string realmente é um hash seguro; essa responsabilidade pertence ao futuro serviço de senhas. Não há senha de exemplo nem usuário inicial inserido.
 
 ## Estratégia única para criar o schema
 
-`database/scripts/001_schema.sql` é referência técnica do Dia 1. A preferência para o Dia 2 é **EF Core migrations como única estratégia oficial para o schema**. A decisão e o primeiro mapeamento serão registrados antes de provisionar o banco. Não aplicar o SQL e depois uma migration inicial equivalente no mesmo banco. Se houver experimento manual com este script, usar banco de desenvolvimento separado e não reaproveitá-lo como banco inicial das migrations.
+**EF Core migrations são o único mecanismo oficial de criação e evolução do schema.** `database/scripts/001_schema.sql` é somente referência técnica do Dia 1 e não foi aplicado. Não executar esse script em banco gerenciado por migrations.
 
-O script não cria banco, não remove objetos e não altera tabelas existentes. Ele recusa bancos de sistema, transações já abertas, presença de qualquer uma das três tabelas/objetos com esses nomes e histórico de migrations. Não é idempotente: uma segunda execução termina com erro explícito. Isso evita apresentar um schema preexistente ou parcial como válido. A criação das três tabelas e do índice ocorre em uma única transação com `XACT_ABORT`, `TRY/CATCH` e rollback em erro de execução. Erros de compilação também precisam ser corrigidos antes da execução; o script ainda requer validação real em SQL Server. [Referência oficial sobre XACT_ABORT](https://learn.microsoft.com/en-us/sql/t-sql/statements/set-xact-abort-transact-sql?view=sql-server-ver17).
+`TaskFlowDev` é o banco existente, atualizado por `dotnet ef database update`; não é criado, apagado nem substituído por testes. Antes da última migration foram confirmados zero registros nas três tabelas. A migration corretiva alterou a collation do e-mail e refez `Versao` para `rowversion NOT NULL`; a coluna é gerada novamente pelo SQL Server, sem apagar linhas ou outras colunas. As migrations também incorporaram defaults SQL planejados.
 
-Quando a execução manual de referência for necessária, selecionar explicitamente uma instância e um banco de desenvolvimento existente e conferir seu nome antes de usar o script. Não há conexão configurada na API neste dia. Para migrations futuras, manter operações e scripts de evolução sob a mesma revisão; objetos programáveis poderão ser adicionados por migrations ou por artefatos versionados executados por elas, evitando duas fontes de criação de tabelas.
+Os testes de persistência usam um banco efêmero `TaskFlowIntegrationTests_<GUID>`, criado e removido pelo fixture em servidor SQL Server real; o catálogo da connection string de teste é forçado para `master` antes de criar a base. O fixture aplica todas as migrations, limpa apenas suas próprias tabelas entre casos e remove somente a base que criou.
+
+Resultado SQL Server desta execução: 11 aprovados, 0 reprovados e 0 ignorados. Cobertura inclui usuários/e-mail, tarefas, defaults do banco, enums/UTC, FK, histórico, filtros/paginação, concorrência, transações e atomicidade. A evidência da última execução e o nome concreto do banco temporário estão no [diário](diario-desenvolvimento.md).
 
 ## Objetos programáveis planejados
 

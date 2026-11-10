@@ -1,4 +1,40 @@
-# Diagnóstico do ambiente — Dia 1
+# Diagnóstico do ambiente e validação — Dia 1 e Dia 2
+
+## Situação verificada no Dia 2 — 10/11/2026
+
+O estado abaixo foi medido novamente nesta execução; os detalhes do Dia 1 foram preservados como histórico na seção seguinte.
+
+| Item | Resultado |
+| --- | --- |
+| SDK selecionado | `dotnet --version`: **10.0.403**, selecionado por `global.json`; SDKs 8.0.427, 10.0.401 e 10.0.403 instalados. Runtimes ASP.NET Core/.NET 10 disponíveis. |
+| SQL Server | Serviço `MSSQLSERVER` ativo; SQL Server 2025, versão 17.0.1145.4. Conexão integrada real via `sqlcmd -S localhost -E -C` aprovada. |
+| `TaskFlowDev` antes de migrations corretivas | Banco existente confirmado; histórico continha `InitialCreate` e três tabelas sem dados (0 Usuarios, 0 Tarefas, 0 HistoricoTarefas). |
+| `TaskFlowDev` após migrations | Mesmo banco, com `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults`. `Versao` é `rowversion NOT NULL`; e-mail usa `Latin1_General_100_CI_AS`. Nenhuma linha foi apagada ou recriada. |
+| Banco de teste SQL | `TaskFlowIntegrationTests_<GUID>`, criado por cada execução da suíte, migrations aplicadas e banco removido ao final. Suíte completa final: `TaskFlowIntegrationTests_fd03a55e59f54bf096103f6a555dfd0e`; execução filtrada: `TaskFlowIntegrationTests_f05850514fb440af9e70301c85493240`. Nunca usa `TaskFlowDev`. |
+| Conexão da API Development | `ConnectionStrings:TaskFlow` em `appsettings.Development.json`; autenticação integrada e catálogo `TaskFlowDev`. Teste de API resolve o contexto, confirma o catálogo e abre conexão real (`CanConnectAsync`). A resolução da persistência sem configuração falha explicitamente, sem fallback oculto. |
+| Credenciais | Varredura dos arquivos de código/configuração não encontrou senhas ou secrets. A connection string versionada contém apenas autenticação integrada para ambiente local. A connection string opcional dos testes vem de `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório. |
+| Restore | `dotnet restore TaskFlow.sln`: sucesso. |
+| Build | `dotnet build TaskFlow.sln --no-restore --nologo`: sucesso, **0 avisos e 0 erros**. |
+| Testes de domínio | `Category=Domain`: **25 aprovados, 0 reprovados, 0 ignorados**. |
+| Testes de API/HTTP | `Category=Http`: **6 aprovados, 0 reprovados, 0 ignorados**. Inclui endpoints HTTP e DI apontando para `TaskFlowDev`. |
+| Testes SQL Server | `Category=SqlServer`: **11 aprovados, 0 reprovados, 0 ignorados** em SQL Server real. |
+| Total | `dotnet test TaskFlow.sln`: **42 aprovados, 0 reprovados, 0 ignorados**. |
+
+Os testes SQL verificam inserção/consulta de Usuario e Tarefa, email duplicado com variação de caixa, defaults de banco, enums, UTC, FKs, histórico, filtros e paginação estável, RowVersion com dois contextos, commit/rollback e atualização+histórico atomicamente. `DbUpdateConcurrencyException` foi observado na escrita obsoleta; a atualização mais recente permaneceu no banco. Uma falha de FK ao gravar histórico reverteu a atualização de tarefa na mesma transação. Repetir uma alteração sem mudança retornou `null` e permaneceu apenas um evento de histórico.
+
+### Problemas corrigidos durante a validação
+
+- Mapeamento de `_rowVersion` usava propriedade sombra e criava `Versao` anulável. O mapeamento agora associa o backing field à propriedade `RowVersion`, exige 8 bytes e configura o token de concorrência. A correção é uma migration posterior, não uma recriação da inicial.
+- SQL Server não permite alterar diretamente o tipo rowversion existente. A migration corretiva remove e recria somente a coluna gerada `Versao`, mantendo linhas e dados de negócio. Na aplicação em `TaskFlowDev`, a tabela estava vazia, confirmado antes da alteração.
+- A alteração de collation de `Email` dependia de check constraint e índice único. A migration agora remove e recria esses objetos na ordem correta.
+- `datetime2` não armazena `DateTimeKind`; conversores EF garantem UTC na materialização.
+- A paginação por criação agora desempata por Id; limites inválidos são rejeitados.
+- Repositórios salvavam cada chamada separadamente; unidade de trabalho explícita preserva atomicidade entre chamadas dentro da mesma transação scoped.
+- Configuração sem connection string não aponta silenciosamente para `TaskFlowDev`.
+
+O schema é gerenciado exclusivamente pelas migrations EF Core. `database/scripts/001_schema.sql` não foi executado. A API não aplica migrations automaticamente na inicialização.
+
+## Histórico documentado do Dia 1 (09/11/2026)
 
 Referência e execução: **09/11/2026**, fuso do usuário America/Sao_Paulo. Nenhum SDK, Docker, Flutter ou SQL Server foi instalado por esta atividade.
 

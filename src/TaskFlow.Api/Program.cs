@@ -149,6 +149,7 @@ app.MapGet("/api/info", (SystemInfo info) => Results.Ok(info))
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapTaskEndpoints();
 
 app.Run();
 

@@ -20,11 +20,11 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 3
+## Estado executado até o Dia 4
 
-- **Concluídas:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização) e US04 (gerenciamento de usuários). US03/US04 foram implementadas e exercitadas por HTTP real sobre SQL Server isolado; o bootstrap administrativo também foi testado e é idempotente.
+- **Concluídas:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). `POST /api/tasks` e detalhe autorizado foram exercitados por HTTP real com SQL Server isolado.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
-- **Ainda planejadas:** US05–US13, incluindo endpoints de tarefas, histórico HTTP, interfaces, objetos SQL, contêiner, Kubernetes e CI/CD.
+- **Parciais ou planejadas:** US06 tem apenas consulta de detalhe; lista paginada/filtros, US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
 
 ## Plano das três sprints
 

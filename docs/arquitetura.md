@@ -9,7 +9,7 @@ Atualizada em 10/11/2026. A solução adota um monólito modular simples em ASP.
 | TaskFlow.Domain | Entidades Usuario, Tarefa e HistoricoTarefa, enums e invariantes locais | Nenhuma das outras camadas | Modelo e validações |
 | TaskFlow.Application | Contratos de repositório, unidade de trabalho e informações da aplicação | Domain | Contratos e informações |
 | TaskFlow.Infrastructure | Persistência SQL Server com EF Core, migrations e repositórios | Application, Domain | Persistência real implementada |
-| TaskFlow.Api | Rotas REST, JWT, autorização, contratos HTTP, DI e bootstrap explícito | Application, Infrastructure | Health/info, login e gestão de usuários |
+| TaskFlow.Api | Rotas REST, JWT, autorização, contratos HTTP, DI e bootstrap explícito | Application, Infrastructure | Health/info, login, usuários, criação e detalhe autorizado de tarefas |
 | TaskFlow.Tests | Testes de domínio, middleware HTTP e persistência SQL Server real isolada | Projetos sob teste | Testes automatizados |
 
 As referências da solução expressam a direção das dependências de compilação. A API é o ponto de composição; repositórios e unidade de trabalho são registrados por DI. Não há repositório genérico nem banco em memória para simular persistência.
@@ -54,9 +54,11 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 - `PasswordHash` é gerado/verificado por `PasswordHasher<Usuario>` do ASP.NET Core Identity; sucesso com necessidade de rehash atualiza o valor armazenado. DTOs públicos nunca incluem o hash.
 - JWT HMAC-SHA256 usa chave Base64 externa com mínimo de 256 bits, issuer/audience obrigatórios e validade de 60 minutos. Ausência ou chave inválida impede a inicialização; não há valor padrão inseguro.
 - Policies ASP.NET Core protegem `/api/users` com o perfil Administrador. Login tem rate limit de 10 tentativas por minuto por IP. `/health` e `/api/info` permanecem públicos.
+- `POST /api/tasks` exige policy Administrador; o criador é extraído do claim `sub` validado, nunca do DTO. Responsável opcional precisa ser usuário existente com perfil Funcionario. `GET /api/tasks/{id}` permite consulta a administradores e a usuários que sejam criador ou responsável.
+- DTOs de tarefa são separados das entidades; a resposta converte RowVersion binária em Base64. A criação persiste tarefa e evento `CriarTarefa` dentro da mesma `IUnitOfWork` transacional.
 - O bootstrap do primeiro administrador é comando local `--bootstrap-admin`, somente em Development e somente para `TaskFlowDev`; pede senha sem eco, é idempotente e nunca roda no startup.
 - Atualização de usuário usa transação serializável para preservar o último administrador. Não existe endpoint de remoção.
-- Concorrência otimista com `rowversion` de oito bytes está mapeada e testada em SQL Server; os endpoints HTTP de tarefa e o conflito HTTP ainda não foram implementados.
+- Concorrência otimista com `rowversion` de oito bytes está mapeada e testada em SQL Server; a resposta de tarefa expõe o token para uso posterior, mas edição e conflito HTTP de tarefa ainda não estão implementados.
 - Persistir alterações relevantes de tarefa e histórico na mesma transação. O mecanismo de auditoria será definido antes da implementação SQL complementar, evitando duplicar registros entre aplicação e trigger.
 - EF Core migrations são a única fonte oficial do schema. `database/scripts/001_schema.sql` é referência técnica do Dia 1 e não foi executado.
 - Carregar configuração não sensível por `appsettings`; connection strings e chave de assinatura vêm de configuração externa/User Secrets, sem valores reais no repositório.
@@ -64,6 +66,6 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 
 ## Evolução prevista
 
-As migrations existentes são a única estratégia oficial de evolução do schema. O Dia 3 não alterou schema nem executou migration; fluxo manual de bootstrap no banco de desenvolvimento ainda requer credenciais escolhidas pelo mantenedor.
+As migrations existentes são a única estratégia oficial de evolução do schema. O Dia 4 não alterou schema nem executou migration; criação/histórico e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
 
 Docker, Kubernetes, CI/CD e clientes web/mobile/desktop pertencem às próximas sprints; os diretórios reservados não representam infraestrutura implantada. Resultados medidos estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).

@@ -1,6 +1,6 @@
-# Modelo de dados — Dia 2
+# Modelo de dados — atualizado no Dia 4
 
-Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. Não há endpoints de CRUD nem autenticação.
+Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. O Dia 4 adicionou endpoints de criação e consulta de detalhe sem alterar entidades, schema ou migrations.
 
 ## Relacionamentos
 
@@ -63,7 +63,7 @@ Os nomes das entidades são `Usuario`, `Tarefa` e `HistoricoTarefa`; as tabelas 
 | Tarefas: `ResponsavelId` | `uniqueidentifier` | FK opcional para Usuarios. |
 | Tarefas: `Versao` | `rowversion NOT NULL` | Gerada pelo SQL Server; mapeada ao campo privado `_rowVersion` e à propriedade de leitura `Tarefa.RowVersion`. |
 | HistoricoTarefas: `TarefaId` | `uniqueidentifier` | FK obrigatória para Tarefas. |
-| HistoricoTarefas: `UsuarioId` | `uniqueidentifier` | FK obrigatória para Usuarios. |
+| HistoricoTarefas: `UsuarioId` | `uniqueidentifier` | FK obrigatória para Usuarios; na criação da tarefa identifica o administrador autenticado. |
 | HistoricoTarefas: `Acao` | `nvarchar(80)` | Obrigatória, até 80 unidades; identifica a alteração. |
 | HistoricoTarefas: `DataUtc` | `datetime2(7)` | Obrigatória, default `SYSUTCDATETIME()`; leitura remarca `DateTimeKind.Utc`. |
 | HistoricoTarefas: `Descricao` | `nvarchar(1000)` | Opcional, até 1.000 unidades; detalhes da alteração. |
@@ -75,8 +75,8 @@ O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao fi
 - **E-mail único:** a coluna usa `Latin1_General_100_CI_AS`, independente da collation do banco. A entidade normaliza e valida; índice único e collation do SQL impedem duplicidade inclusive sob concorrência e quando há diferença de maiúsculas/minúsculas. `TaskFlowDbContext` converte violações únicas/FK/check em `PersistenceConstraintException` com uma categoria segura, sem embutir detalhes do SQL no texto.
 - **UTC:** o domínio exige `DateTimeKind.Utc`. `datetime2` não guarda fuso nem `Kind`; conversores de valor persistem o relógio UTC e reconstituem `DateTimeKind.Utc` na leitura. Defaults usam `SYSUTCDATETIME()`. Não converter valores usando o fuso local do servidor.
 - **Concorrência:** `rowversion` é um token binário obrigatório de 8 bytes, gerado pelo SQL Server e configurado como concurrency token. EF usa o campo privado `_rowVersion`; o getter retorna cópia defensiva. A atualização envia a versão original; conflito resulta em `DbUpdateConcurrencyException` e não sobrescreve a primeira atualização. Testes SQL validam cópia, token novo e conflito concorrente com dois `DbContext`s. [Referência oficial do SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/data-types/rowversion-transact-sql?view=sql-server-ver17).
-- **Histórico e atomicidade:** as mutações de título, status e prioridade exigem ator/data UTC e retornam um evento apenas quando há mudança. Repetir o mesmo valor retorna `null`. `IUnitOfWork` envolve os `SaveChangesAsync` dos repositórios na mesma transação e permite commit/rollback do agregado tarefa+histórico; teste real cobre commit único, duplicação evitada por mudança sem efeito e rollback depois de falha FK. JWT e identidade autenticada estão implementados para auth/usuários; endpoints de tarefa ainda não foram criados para integrar autoria autenticada.
-- **Autorização:** perfis são dados de domínio; a existência da coluna não implementa controle de acesso. A matriz de permissões planejadas está em [escopo.md](escopo.md). SQL de referência não aplica autorização por usuário final.
+- **Histórico e atomicidade:** as mutações de título, status e prioridade exigem ator/data UTC e retornam um evento apenas quando há mudança. Repetir o mesmo valor retorna `null`. `POST /api/tasks` grava a tarefa e um único evento `CriarTarefa` usando a `IUnitOfWork` e os repositórios existentes. Teste HTTP/SQL Server real provocou falha após salvar o histórico dentro da transação e confirmou que tarefa e histórico foram ambos revertidos.
+- **Autorização:** `POST /api/tasks` exige Administrador; identidade autora vem do `sub` validado. `GET /api/tasks/{id}` permite Administrador ou usuário igual ao criador/responsável. A matriz atual está em [escopo.md](escopo.md). SQL não substitui autorização da API.
 - **Validação:** `CHECK` restringe enums, campos obrigatórios e GUIDs vazios; FKs garantem referências existentes. A validação C# de espaços e e-mail é mais completa que as verificações básicas SQL. O banco não reconhece se uma string realmente é um hash seguro; essa responsabilidade pertence ao futuro serviço de senhas. Não há senha de exemplo nem usuário inicial inserido.
 
 ## Estratégia única para criar o schema
@@ -87,7 +87,7 @@ O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao fi
 
 Os testes de persistência usam um banco efêmero `TaskFlowIntegrationTests_<GUID>`, criado e removido pelo fixture em servidor SQL Server real; o catálogo da connection string de teste é forçado para `master` antes de criar a base. O fixture aplica todas as migrations, limpa apenas suas próprias tabelas entre casos e remove somente a base que criou.
 
-Resultado SQL Server desta execução: 11 aprovados, 0 reprovados e 0 ignorados. Cobertura inclui usuários/e-mail, tarefas, defaults do banco, enums/UTC, FK, histórico, filtros/paginação, concorrência, transações e atomicidade. A evidência da última execução e o nome concreto do banco temporário estão no [diário](diario-desenvolvimento.md).
+Resultado final da suíte: 71 aprovados, 0 reprovados e 0 ignorados; 38 testes filtrados por `Category=SqlServer`, incluindo os novos fluxos HTTP que usam SQL isolado. O fixture cria `TaskFlowIntegrationTests_<GUID>`, aplica migrations existentes e remove somente o banco temporário. A evidência detalhada está no [diário](diario-desenvolvimento.md).
 
 ## Objetos programáveis planejados
 

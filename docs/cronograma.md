@@ -7,8 +7,8 @@ Este é um plano interno de duas semanas, elaborado em 09/11/2026, e não uma de
 | 1 | 09/11, segunda-feira | S1 | Diagnosticar ambiente e arquivos; completar solução, domínio, API mínima, SQL de referência, testes e planejamento. | Arquivos revisados; restore/build/testes e HTTP registrados; estado Git conhecido. |
 | 2 | 10/11, terça-feira | S1 | Reavaliar atualização para .NET 10 antes do fim do suporte .NET 8; confirmar schema; preparar EF Core/SQL Server e primeira migration revisada. | Decisão de versão registrada com testes; migration aplicada em desenvolvimento real; constraints/rowversion verificadas; conexão sem segredo versionado. |
 | 3 | 11/11, quarta-feira | S1 | Implementar autenticação e autorização por perfis. | Hashing apropriado, identidade no servidor e testes de credenciais/401/403. |
-| 4 | 12/11, quinta-feira | S1 | Implementar gestão administrativa de usuários e criação/atribuição de tarefas. | Casos de uso persistidos, unicidade de e-mail e regras de cadastro testadas. |
-| 5 | 13/11, sexta-feira | S1 | Integrar histórico transacional de criação; revisar incremento e retrospectiva S1. | Demonstração autenticada, rollback verificado e backlog ajustado. |
+| 4 | 12/11, quinta-feira | S1 | Implementar gestão administrativa de usuários e criação/atribuição de tarefas, incluindo histórico transacional (antecipado). | Casos de uso persistidos, unicidade de e-mail e regras de cadastro testadas. |
+| 5 | 13/11, sexta-feira | S1 | Revisar incremento e retrospectiva S1; preparar a etapa de consultas e atualizações. | Backlog ajustado e próximas regras de autorização/concorrência refinadas. |
 | 6 | 14/11, sábado | S2 | Implementar consultas paginadas e filtros com visibilidade por usuário. | Testes de permissões e consultas em SQL Server. |
 | 7 | 15/11, domingo | S2 | Implementar alterações, concorrência otimista e histórico. | Dois escritores testados; conflito sem sobrescrita; auditoria consistente. |
 | 8 | 16/11, segunda-feira | S2 | Implementar web responsiva com autenticação e consulta. | Web integrada à API, fluxo e exibição em tamanhos de tela previstos. |
@@ -22,6 +22,8 @@ Este é um plano interno de duas semanas, elaborado em 09/11/2026, e não uma de
 ## Atualização de execução — 10/11/2026
 
 O incremento de autenticação previsto para o Dia 3 foi antecipado e implementado em 10/11: JWT, hashing, autorização por perfil, bootstrap administrativo explícito, endpoints de usuários, testes e documentação. Isso não altera a data planejada dos dias posteriores nem declara concluídas as funcionalidades ainda pendentes. O bootstrap manual e a demonstração em `TaskFlowDev` dependem de senha escolhida pelo mantenedor e permanecem por executar.
+
+O incremento do Dia 4 também foi antecipado para 10/11: criação e atribuição administrativa de tarefas, histórico na mesma transação, consulta de detalhe com autorização por criador/responsável e testes HTTP/SQL Server. A lista paginada e as atualizações/reatribuições permanecem para etapas posteriores. A validação não gravou em `TaskFlowDev` nem alterou migrations.
 
 ## Dependências e riscos de prazo
 

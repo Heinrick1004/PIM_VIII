@@ -4,11 +4,11 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 3 — autenticação e usuários:** foram implementados login JWT, autorização por perfil, hashing de senha, bootstrap explícito do primeiro administrador e gerenciamento administrativo de usuários. O bootstrap manual em `TaskFlowDev` ainda não foi executado porque depende de senha definida localmente; os fluxos foram exercitados em SQL Server isolado. Nenhuma migration ou alteração de schema foi necessária. Os Dias 1 e 2 permanecem preservados.
+**Dia 4 — cadastro e atribuição de tarefas:** além da autenticação JWT e gestão administrativa de usuários, a API agora permite que somente administradores criem tarefas, opcionalmente atribuindo-as a funcionários. O criador vem exclusivamente do token validado; status inicia como Pendente; tarefa e evento `CriarTarefa` são persistidos na mesma transação. `GET /api/tasks/{id}` permite acesso a administradores e a funcionários vinculados como criador ou responsável. O bootstrap e a demonstração manual em `TaskFlowDev` permanecem dependentes de credenciais escolhidas pelo mantenedor. Nenhuma migration ou alteração de schema foi necessária.
 
-A validação do Dia 3 mantém os 42 testes anteriores e acrescenta testes JWT, middleware e gestão de usuários. Os resultados finais e os grupos de categoria estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+Validação final: **71 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. Os resultados detalhados, incluindo testes HTTP e SQL Server reais, estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
 
-Execução final: **52 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. `Category=Http` (13) e `Category=SqlServer` (19) se sobrepõem nos sete testes HTTP que usam SQL isolado; `Category=Domain` teve 25 e `Category=Security` teve 2.
+`Category=Http` (32) e `Category=SqlServer` (38) se sobrepõem nos testes HTTP integrados que usam SQL isolado; os contadores filtrados não devem ser somados. `Category=Domain` teve 25 e `Category=Security` teve 2.
 
 ## Tecnologias e requisitos
 
@@ -72,10 +72,12 @@ Invoke-RestMethod http://localhost:5046/api/info
 | `GET /api/users` | Somente Administrador; listagem paginada, `pageSize` máximo 100 |
 | `GET /api/users/{id}` | Somente Administrador; consulta pública ou 404 |
 | `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
+| `POST /api/tasks` | Somente Administrador; cria tarefa e histórico atomicamente; responsável funcionário opcional |
+| `GET /api/tasks/{id}` | JWT obrigatório; Administrador consulta qualquer tarefa, funcionário somente se criador ou responsável |
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-Rotas administrativas retornam 401 sem token e 403 para funcionário. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Rotas administrativas retornam 401 sem token e 403 para funcionário. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. A resposta de tarefa apresenta RowVersion em Base64. A lista paginada, atualizações/reatribuições e consulta de histórico por rota ainda não foram implementadas. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
 
 ## Banco e configuração
 
@@ -124,4 +126,4 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Securi
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar login/CRUD no Swagger em `TaskFlowDev`; implementar tarefas e clientes planejados nas etapas seguintes. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar consulta paginada e alterações de tarefas no Dia 5/6. Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.

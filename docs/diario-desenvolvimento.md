@@ -121,3 +121,35 @@ Os grupos HTTP e SQL Server se sobrepõem nos sete novos testes de endpoints que
 - O fluxo login → `/me` → CRUD → funcionário 403 foi exercitado por testes HTTP contra SQL isolado, mas não foi demonstrado manualmente no Swagger de `TaskFlowDev`; não havia credenciais fornecidas para isso.
 - Permanecem pendentes endpoints de tarefas, histórico HTTP, interfaces web/mobile/desktop, Docker, Kubernetes e CI/CD.
 - Restore, build, categorias, preservação do banco e resultados estão detalhados em [ambiente.md](ambiente.md).
+
+## Dia 4 — criação e atribuição de tarefas (implementado em 10/11/2026)
+
+### Implementação
+
+- Adicionados DTOs específicos para criar tarefa e responder com os campos públicos e RowVersion Base64; a entidade EF não é serializada diretamente.
+- `POST /api/tasks` exige JWT e policy Administrador. Valida corpo, título (1–200), prioridade, responsável não vazio e prazo UTC. O usuário responsável deve existir e ter perfil Funcionario; a atribuição permanece opcional. Payload sem corpo ou campos inválidos retorna 400, responsável ausente no banco retorna 404 e constraints de integridade retornam 409.
+- O `CriadorId` deriva do `sub` do principal JWT revalidado no banco. Campo adicional `criadorId` enviado pelo cliente não faz parte do contrato nem substitui o autor autenticado.
+- A tarefa inicia Pendente e recebe Id e hora UTC do servidor. O evento único `CriarTarefa` registra Id próprio, tarefa, administrador, instante UTC e descrição não sensível.
+- Repositórios existentes salvam tarefa e histórico sob a mesma transação da `IUnitOfWork`; não foram adicionados triggers, outro mecanismo de transação, serviço de aplicação ou mudança arquitetural.
+- `GET /api/tasks/{id}` permite consulta ampla a administradores e consulta a funcionário apenas se for criador ou responsável. Tarefa inexistente retorna 404; usuário sem vínculo recebe 403.
+- Sem alterações de entidade, schema ou migrations. `TaskFlowDev` não foi alvo de gravação ou migration; o bootstrap não foi executado. Testes usam exclusivamente `TaskFlowIntegrationTests_<GUID>`.
+
+### Validação final real
+
+| Verificação | Aprovados | Reprovados | Ignorados |
+| --- | ---: | ---: | ---: |
+| `dotnet restore TaskFlow.sln` | Sucesso | — | — |
+| `dotnet build TaskFlow.sln` | 0 avisos | 0 erros | — |
+| Domínio (`Category=Domain`) | 25 | 0 | 0 |
+| HTTP (`Category=Http`) | 32 | 0 | 0 |
+| SQL Server (`Category=SqlServer`) | 38 | 0 | 0 |
+| Segurança (`Category=Security`) | 2 | 0 | 0 |
+| Suíte completa (`dotnet test TaskFlow.sln`) | **71** | **0** | **0** |
+
+Os grupos HTTP e SQL Server se sobrepõem nos testes de endpoints que usam SQL Server isolado. Os testes demonstram persistência da tarefa e RowVersion de oito bytes, exatamente um evento de criação, commit conjunto, UTC, autoria proveniente do token, rejeição de atribuição inválida, 401/403 e autorização por vínculo. Para rollback, o repositório real salva o histórico dentro da transação e um adaptador de falha de teste lança exceção; leitura posterior em outro `DbContext` confirma zero tarefa e zero histórico. Não houve falha não intencional na suíte.
+
+### Pendências
+
+- A demonstração manual no Swagger contra `TaskFlowDev` requer configurar a chave JWT e credenciais escolhidas pelo mantenedor, executar explicitamente o bootstrap e validar o fluxo. Nenhuma senha foi inventada.
+- Listagem paginada/filtros, endpoint de histórico, edição/reatribuição de tarefas, interfaces, objetos SQL programáveis, Docker, Kubernetes e CI/CD continuam fora deste incremento.
+- Recomendações para Dia 5: iniciar alterações administrativas com histórico transacional e controle RowVersion, definir a matriz de mudança de campos e testar conflitos HTTP sem sobrescrita; manter novos testes em SQL Server isolado.

@@ -12,7 +12,7 @@ O MVP deverá permitir que administradores distribuam trabalho e que funcionári
 
 **Dia 1:** solução .NET 8 em quatro camadas, entidades e validações fundamentais, API com `GET /health` e `GET /api/info`, testes básicos, schema SQL de referência e documentação. Resultados executados são registrados no diário e no diagnóstico do ambiente.
 
-**Estado após Dia 3:** persistência SQL Server com migrations, autenticação JWT e autorização por perfil, gerenciamento administrativo de usuários, bootstrap explícito e testes reais em banco isolado foram implementados. Operações de tarefas, histórico transacional HTTP, concorrência de tarefas, clientes, procedures/functions/triggers, Docker, Kubernetes e CI/CD continuam planejados.
+**Estado após Dia 4:** persistência SQL Server com migrations, autenticação JWT, gerenciamento administrativo de usuários, criação administrativa de tarefas com responsável opcional e histórico transacional, além de consulta de detalhe com autorização por vínculo foram implementados e testados em banco SQL isolado. Listagem paginada, atualização/reatribuição, endpoint de histórico, clientes, procedures/functions/triggers, Docker, Kubernetes e CI/CD continuam planejados.
 
 Ficam fora do MVP: microserviços, CQRS, MediatR, múltiplas empresas, chat, anexos, notificações externas, recuperação de senha por e-mail, modo offline e relatórios analíticos avançados. Não haverá endpoints de sucesso para operações ainda não implementadas.
 
@@ -33,10 +33,10 @@ Os critérios abaixo descrevem o comportamento esperado do MVP. A coluna de situ
 | --- | --- | --- | --- |
 | RF01 | Autenticar usuários e aplicar os perfis Administrador e Funcionario. Credenciais inválidas devem ser rejeitadas; rotas protegidas devem devolver 401/403 conforme o caso. | NET, BD | Implementado e testado com middleware JWT real; perfil revalidado no banco |
 | RF02 | Permitir que somente administradores cadastrem, consultem e alterem usuários. Nome e e-mail devem ser válidos; e-mail duplicado deve ser rejeitado; senhas devem ser transformadas em hash antes da persistência. | NET, BD | Endpoints implementados; senha hasheada; CRUD sem exclusão; SQL isolado testado |
-| RF03 | Permitir ao administrador cadastrar e atribuir tarefas com título de até 200 caracteres, descrição opcional, prioridade válida, prazo UTC opcional e criador identificado. Nova tarefa deve iniciar Pendente. | NET, BD | Domínio e persistência existem; endpoint/caso de uso HTTP pendente |
-| RF04 | Consultar tarefas por status e responsável, com paginação e visibilidade conforme a matriz de permissões. Uma consulta não pode expor tarefas de outros funcionários sem vínculo permitido. | NET, BD | Planejado |
+| RF03 | Permitir ao administrador cadastrar e atribuir tarefas com título de até 200 caracteres, descrição opcional, prioridade válida, prazo UTC opcional e criador identificado. Nova tarefa deve iniciar Pendente. | NET, BD | `POST /api/tasks` implementado e validado em SQL Server; histórico criado na mesma transação |
+| RF04 | Consultar tarefas por status e responsável, com paginação e visibilidade conforme a matriz de permissões. Uma consulta não pode expor tarefas de outros funcionários sem vínculo permitido. | NET, BD | `GET /api/tasks/{id}` e visibilidade por vínculo implementados; listagem/filtros/paginação pendentes |
 | RF05 | Permitir alterações conforme o perfil. Status deve ser Pendente, EmAndamento ou Concluida; prioridade deve ser Baixa, Media ou Alta. Uma versão desatualizada deve produzir conflito sem sobrescrever a versão atual. | NET, BD | Persistência/RowVersion testados no Dia 2; endpoints e resposta HTTP de conflito pendentes |
-| RF06 | Registrar criação e alterações relevantes de tarefas, identificando autor, ação, data UTC e descrição. A mudança e o registro devem ser confirmados na mesma transação; o histórico não pode ser editado pelo cliente. | NET, BD | Persistência transacional testada no Dia 2; integração com API de tarefas pendente |
+| RF06 | Registrar criação e alterações relevantes de tarefas, identificando autor, ação, data UTC e descrição. A mudança e o registro devem ser confirmados na mesma transação; o histórico não pode ser editado pelo cliente. | NET, BD | Evento de criação integrado à API e rollback real verificado; histórico de atualizações futuras |
 | RF07 | Disponibilizar web responsiva e clientes mínimos Flutter e desktop C#, consumindo a mesma API. Cada cliente deve permitir autenticação, consulta das tarefas permitidas e mudança de status de uma tarefa atribuída. | NET, CLOUD | Diretórios reservados; clientes planejados |
 | RF08 | Expor `GET /health` com status e timestamp UTC e `GET /api/info` com nome, versão e descrição. Ambos devem responder HTTP 200 sem exigir banco no Dia 1. | NET, CLOUD | API mínima do Dia 1 |
 
@@ -55,7 +55,7 @@ Os critérios abaixo descrevem o comportamento esperado do MVP. A coluna de situ
 
 ## Matriz de permissões vigente
 
-As rotas implementadas aplicam esta matriz na API. Operações de tarefas ainda não estão expostas.
+As rotas implementadas aplicam esta matriz na API. Para funcionário, “vinculado” significa criador ou responsável atual no detalhe da tarefa.
 
 | Operação | Administrador | Funcionario | Sem autenticação |
 | --- | --- | --- | --- |
@@ -64,8 +64,9 @@ As rotas implementadas aplicam esta matriz na API. Operações de tarefas ainda 
 | `GET /api/auth/me` | Própria identidade do token | Própria identidade do token | 401 |
 | Cadastrar, listar e alterar usuários e perfis | Permitido | Negado | Negado |
 | Bootstrap do primeiro administrador | Comando local explicitamente executado; apenas Development/TaskFlowDev | Não aplicável | Não aplicável |
-| Cadastrar e atribuir tarefa | Permitido; criador é o usuário autenticado | Negado | Negado |
-| Listar/ver tarefa e seu histórico | Todas as tarefas | Somente se criador ou responsável atual | Negado |
+| Cadastrar e atribuir tarefa | Permitido; criador é o usuário autenticado e responsável funcionário é opcional | Negado | 401 |
+| Consultar detalhe `GET /api/tasks/{id}` | Qualquer tarefa | Somente se criador ou responsável atual | 401 |
+| Listar tarefas com filtros/paginação e consultar histórico por rota | Planejado | Planejado | 401 quando implementado |
 | Alterar título, descrição, prioridade, prazo ou responsável | Qualquer tarefa | Negado | Negado |
 | Alterar status | Qualquer tarefa | Somente se responsável atual | Negado |
 | Fornecer autor/criador arbitrário em uma alteração | Negado; identidade vem da autenticação | Negado | Negado |

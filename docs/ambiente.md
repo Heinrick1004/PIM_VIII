@@ -1,4 +1,27 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 3
+# Diagnóstico do ambiente e validação — Dias 1 a 4
+
+## Situação verificada no Dia 4 — 10/11/2026
+
+| Item | Resultado |
+| --- | --- |
+| Branch/base | `main`, commit-base `402db4a1a79c107e7fe1df3b063683449a4e4528`, confirmado em `origin/main` após `git fetch`. |
+| Restore | `dotnet restore TaskFlow.sln`: sucesso. |
+| Build | `dotnet build TaskFlow.sln`: sucesso, **0 avisos e 0 erros**. |
+| Suíte completa | `dotnet test TaskFlow.sln`: **71 aprovados, 0 reprovados, 0 ignorados**. |
+| Domínio | `Category=Domain`: **25 aprovados, 0 reprovados, 0 ignorados**. |
+| HTTP | `Category=Http`: **32 aprovados, 0 reprovados, 0 ignorados**. |
+| SQL Server | `Category=SqlServer`: **38 aprovados, 0 reprovados, 0 ignorados**, em SQL Server real e bancos temporários isolados. |
+| Segurança | `Category=Security`: **2 aprovados, 0 reprovados, 0 ignorados**. |
+| Categorias | HTTP e SQL Server se sobrepõem nos testes HTTP que usam banco SQL isolado; os resultados filtrados não devem ser somados. |
+| Cobertura nova | Testes cobrem administrador criar, funcionário 403, anônimo 401, validações 400, responsável não existente, criação sem responsável, autor não falsificável, persistência, RowVersion, histórico único, rollback, datas UTC e visibilidade de detalhe. |
+| Banco de teste | Fixture SQL Server real usa `TaskFlowIntegrationTests_<GUID>`, migra e remove apenas cada banco temporário gerado. |
+| `TaskFlowDev` | Não foi gravado, limpo, recriado nem migrado nesta etapa. Os testes SQL apontam para catálogos temporários; nenhum bootstrap foi executado. |
+| Schema | Nenhuma migration foi criada ou modificada; o modelo existente já contém as colunas, FKs e RowVersion necessárias. |
+| Segredos/artefatos | Nenhuma credencial real ou token foi adicionado; a senha presente nos testes é fixa e exclusiva do fixture SQL isolado. Nenhum artefato temporário entrou no conjunto de alterações. |
+
+O detalhe retorna 201 com `Location` e RowVersion Base64; o mesmo token de autorização protege detalhe para administrador ou criador/responsável. A integração de criação e histórico usa `IUnitOfWork`; o teste de falha injeta erro após o repositório salvar o histórico na transação e confirma por novo contexto SQL que nenhuma das duas linhas permanece. Testes também confirmam um único evento `CriarTarefa`.
+
+O bootstrap e a demonstração manual em `TaskFlowDev` permanecem pendentes até o mantenedor definir credenciais. A validação foi automatizada com usuários e senha exclusivos dos testes no banco temporário.
 
 ## Situação verificada no Dia 3 — 10/11/2026
 

@@ -151,5 +151,41 @@ Os grupos HTTP e SQL Server se sobrepõem nos testes de endpoints que usam SQL S
 ### Pendências
 
 - A demonstração manual no Swagger contra `TaskFlowDev` requer configurar a chave JWT e credenciais escolhidas pelo mantenedor, executar explicitamente o bootstrap e validar o fluxo. Nenhuma senha foi inventada.
-- Listagem paginada/filtros, endpoint de histórico, edição/reatribuição de tarefas, interfaces, objetos SQL programáveis, Docker, Kubernetes e CI/CD continuam fora deste incremento.
-- Recomendações para Dia 5: iniciar alterações administrativas com histórico transacional e controle RowVersion, definir a matriz de mudança de campos e testar conflitos HTTP sem sobrescrita; manter novos testes em SQL Server isolado.
+- Listagem geral de tarefas/filtros, edição/reatribuição, interfaces, objetos SQL programáveis, Docker, Kubernetes e CI/CD continuam fora deste incremento.
+- Próxima etapa: iniciar alterações administrativas com histórico transacional e controle RowVersion, definir a matriz de mudança de campos e testar conflitos HTTP sem sobrescrita; manter novos testes em SQL Server isolado.
+
+## Dia 5 — consulta de histórico e fechamento da Sprint 1 (implementado em 10/11/2026)
+
+### Implementação
+
+- Adicionado `GET /api/tasks/{id}/history`, somente leitura, atrás de autenticação. Administrador consulta qualquer tarefa; funcionário só consulta quando é criador ou responsável atual. IDs GUID vazios resultam em 400, GUID malformado não casa a rota (404), tarefa inexistente retorna 404, anônimo 401 e usuário autenticado sem vínculo 403.
+- Criado DTO de evento e resposta paginada contendo `Id`, `TarefaId`, `UsuarioId`, `Acao`, `DataUtc` e `Descricao`, sem serializar entidades EF.
+- `page` começa em 1 e aceita até 1.000.000; `pageSize` padrão 20, máximo 100. Valores inválidos retornam 400. O repositório usa `AsNoTracking`, executa contagem separada e ordena/pagina no SQL Server por `DataUtc`, depois `Id`, sem carregar o histórico inteiro.
+- Nenhuma rota HTTP de escrita/exclusão foi adicionada ao histórico; POST/DELETE no recurso recebem 405. A FK da migration existente relaciona o evento à tarefa; os testes confirmam autor, UTC e exatamente um `CriarTarefa` no fluxo de criação.
+- Sem nova migration/schema. O fixture verifica nome `TaskFlowIntegrationTests_<GUID>` e cria/remove exclusivamente banco temporário. O baseline inicial encontrou um teste preexistente que abria conexão read-only com `TaskFlowDev` apenas via `CanConnectAsync`; removi essa conexão e mantive a verificação do catálogo. A suíte final não conecta nem grava em `TaskFlowDev`; nenhum bootstrap foi executado.
+
+### Verificação da história completa e testes finais
+
+Fluxo HTTP/SQL Server: administrador autenticado cria um funcionário pela API; cria tarefa atribuída; lê detalhe e histórico; responsável lê detalhe e histórico; funcionário sem vínculo é bloqueado; anônimo recebe 401. Verificações adicionais comprovam histórico vazio para tarefa existente, paginação total por página, desempate determinístico por Id quando datas UTC coincidem, e validações de page/pageSize.
+
+| Verificação | Aprovados | Reprovados | Ignorados |
+| --- | ---: | ---: | ---: |
+| Baseline anterior à alteração (`dotnet test TaskFlow.sln`) | 71 | 0 | 0 |
+| `dotnet restore TaskFlow.sln` | Sucesso | — | — |
+| `dotnet build TaskFlow.sln` | 0 avisos | 0 erros | — |
+| Domínio (`Category=Domain`) | 25 | 0 | 0 |
+| HTTP (`Category=Http`) | 35 | 0 | 0 |
+| SQL Server (`Category=SqlServer`) | 41 | 0 | 0 |
+| Segurança (`Category=Security`) | 2 | 0 | 0 |
+| Suíte final (`dotnet test TaskFlow.sln`) | **74** | **0** | **0** |
+
+As categorias HTTP e SQL Server se sobrepõem nos testes integrados; não devem ser somadas. As 17 verificações de `TaskEndpointTests` passaram, incluindo as três novas de histórico/fluxo completo. O teste de rollback existente continuou passando e confirma zero tarefa/evento após falha do repositório de histórico dentro da transação.
+
+### Revisão e retrospectiva da Sprint 1
+
+A revisão antecipada de 10/11 concluiu US01–US05 com critérios cobertos pelos testes e evidências listados em [backlog.md](backlog.md). A demonstração manual em `TaskFlowDev` não é considerada executada; ela permanece pendente de segredo e credenciais escolhidos pelo mantenedor.
+
+- **O que funcionou:** o SQL Server real em fixtures efêmeros comprovou integridade e permissões sem modificar o banco de desenvolvimento; os testes end-to-end verificam a cadeia API → repositórios → SQL.
+- **Dificuldades observadas:** mapeamento de RowVersion, atomicidade entre chamadas individuais de `SaveChangesAsync` e validações HTTP integradas exigiram correções nos dias anteriores. Os contratos reaproveitaram a unidade de trabalho/repositórios, sem acrescentar camadas.
+- **Decisões:** migrations continuam sendo a única estratégia de schema; a aplicação é a única origem do evento, sem triggers de auditoria; histórico é paginado no servidor e somente leitura.
+- **Ajuste da Sprint 2:** priorizar listagem geral/filtros e atualização com RowVersion e histórico. A consulta de detalhe e histórico paginado foram antecipadas. Rever escopo de web e programação SQL diante da capacidade e dependências, sem declarar implementação antes de testá-la.

@@ -1,27 +1,33 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 4
+# Diagnóstico do ambiente e validação — Dias 1 a 5
 
-## Situação verificada no Dia 4 — 10/11/2026
+## Situação verificada no Dia 5 — 10/11/2026
 
 | Item | Resultado |
 | --- | --- |
-| Branch/base | `main`, commit-base `402db4a1a79c107e7fe1df3b063683449a4e4528`, confirmado em `origin/main` após `git fetch`. |
+| Branch/base | `main`, commit-base `3a8167d8c8e21fde771a0ba5fc0e8512a8b6838e`, confirmado em `origin/main` após `git fetch`. |
 | Restore | `dotnet restore TaskFlow.sln`: sucesso. |
 | Build | `dotnet build TaskFlow.sln`: sucesso, **0 avisos e 0 erros**. |
-| Suíte completa | `dotnet test TaskFlow.sln`: **71 aprovados, 0 reprovados, 0 ignorados**. |
+| Suíte completa | Baseline antes das alterações: **71 aprovados, 0 reprovados, 0 ignorados**. Resultado final Dia 5: **74 aprovados, 0 reprovados, 0 ignorados**. |
 | Domínio | `Category=Domain`: **25 aprovados, 0 reprovados, 0 ignorados**. |
-| HTTP | `Category=Http`: **32 aprovados, 0 reprovados, 0 ignorados**. |
-| SQL Server | `Category=SqlServer`: **38 aprovados, 0 reprovados, 0 ignorados**, em SQL Server real e bancos temporários isolados. |
+| HTTP | `Category=Http`: **35 aprovados, 0 reprovados, 0 ignorados**. |
+| SQL Server | `Category=SqlServer`: **41 aprovados, 0 reprovados, 0 ignorados**, em SQL Server real e bancos temporários isolados. |
 | Segurança | `Category=Security`: **2 aprovados, 0 reprovados, 0 ignorados**. |
 | Categorias | HTTP e SQL Server se sobrepõem nos testes HTTP que usam banco SQL isolado; os resultados filtrados não devem ser somados. |
-| Cobertura nova | Testes cobrem administrador criar, funcionário 403, anônimo 401, validações 400, responsável não existente, criação sem responsável, autor não falsificável, persistência, RowVersion, histórico único, rollback, datas UTC e visibilidade de detalhe. |
+| Cobertura nova | Testes cobrem criação e histórico paginado/cronológico, administrador/criador/responsável, 401/403/404, histórico vazio, paginação/empates por Id, UTC, métodos de escrita não permitidos e fluxo completo por HTTP/SQL. |
 | Banco de teste | Fixture SQL Server real usa `TaskFlowIntegrationTests_<GUID>`, migra e remove apenas cada banco temporário gerado. |
-| `TaskFlowDev` | Não foi gravado, limpo, recriado nem migrado nesta etapa. Os testes SQL apontam para catálogos temporários; nenhum bootstrap foi executado. |
+| `TaskFlowDev` | Não foi escrito, limpo, recriado nem migrado. No baseline, o teste anterior chamou `CanConnectAsync` (tentativa de conexão somente, sem query de negócio ou escrita); esse acesso foi removido. A suíte final verifica apenas o catálogo configurado, sem abrir conexão, e testes SQL apontam para catálogos temporários. Nenhum bootstrap foi executado. |
 | Schema | Nenhuma migration foi criada ou modificada; o modelo existente já contém as colunas, FKs e RowVersion necessárias. |
 | Segredos/artefatos | Nenhuma credencial real ou token foi adicionado; a senha presente nos testes é fixa e exclusiva do fixture SQL isolado. Nenhum artefato temporário entrou no conjunto de alterações. |
 
 O detalhe retorna 201 com `Location` e RowVersion Base64; o mesmo token de autorização protege detalhe para administrador ou criador/responsável. A integração de criação e histórico usa `IUnitOfWork`; o teste de falha injeta erro após o repositório salvar o histórico na transação e confirma por novo contexto SQL que nenhuma das duas linhas permanece. Testes também confirmam um único evento `CriarTarefa`.
 
-O bootstrap e a demonstração manual em `TaskFlowDev` permanecem pendentes até o mantenedor definir credenciais. A validação foi automatizada com usuários e senha exclusivos dos testes no banco temporário.
+O bootstrap e a demonstração manual em `TaskFlowDev` permanecem pendentes até o mantenedor definir credenciais. A validação final foi automatizada com usuários e senha exclusivos dos testes no banco temporário; nenhum dos testes finais abre conexão com `TaskFlowDev`.
+
+O teste ponta a ponta cria funcionário pela API autenticada, cria tarefa atribuída, consulta detalhe e histórico como administrador, acessa com o responsável, e confirma bloqueio a funcionário sem vínculo e a cliente anônimo. O endpoint do histórico retorna coleção vazia para tarefa existente sem eventos; valida `page` (1 a 1.000.000) e `pageSize` (1 a 100, default 20). Nenhuma query de persistência materializa todo o histórico antes de paginar.
+
+### Fechamento da Sprint 1
+
+US01–US05 foram revisadas e seus critérios de aceite documentados como atendidos; a tabela de evidências por história e a retrospectiva estão em [backlog.md](backlog.md). A revisão ocorreu em 10/11, antes do fim planejado da Sprint 1, conforme solicitado. A demonstração manual em `TaskFlowDev` é uma pendência operacional separada, pois exige credencial definida pelo mantenedor.
 
 ## Situação verificada no Dia 3 — 10/11/2026
 

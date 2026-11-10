@@ -50,15 +50,14 @@ public sealed class ApiEndpointTests
     }
 
     [Fact]
-    public async Task Development_RegistraPersistenciaComTaskFlowDevSemAbrirConexao()
+    public void Development_ConfiguresTaskFlowDevWithoutConnecting()
     {
-        await using var factory = CreateFactory("Development");
+        using var factory = CreateFactory("Development");
         using var scope = factory.Services.CreateScope();
 
         var context = scope.ServiceProvider.GetRequiredService<TaskFlowDbContext>();
 
         Assert.Equal("TaskFlowDev", context.Database.GetDbConnection().Database);
-        Assert.True(await context.Database.CanConnectAsync());
         Assert.IsType<UsuarioRepository>(scope.ServiceProvider.GetRequiredService<IUsuarioRepository>());
         Assert.IsType<TarefaRepository>(scope.ServiceProvider.GetRequiredService<ITarefaRepository>());
         Assert.IsType<HistoricoTarefaRepository>(scope.ServiceProvider.GetRequiredService<IHistoricoTarefaRepository>());

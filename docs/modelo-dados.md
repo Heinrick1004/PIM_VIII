@@ -1,4 +1,4 @@
-# Modelo de dados — atualizado no Dia 4
+# Modelo de dados — atualizado no Dia 5
 
 Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. O Dia 4 adicionou endpoints de criação e consulta de detalhe sem alterar entidades, schema ou migrations.
 
@@ -77,6 +77,7 @@ O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao fi
 - **Concorrência:** `rowversion` é um token binário obrigatório de 8 bytes, gerado pelo SQL Server e configurado como concurrency token. EF usa o campo privado `_rowVersion`; o getter retorna cópia defensiva. A atualização envia a versão original; conflito resulta em `DbUpdateConcurrencyException` e não sobrescreve a primeira atualização. Testes SQL validam cópia, token novo e conflito concorrente com dois `DbContext`s. [Referência oficial do SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/data-types/rowversion-transact-sql?view=sql-server-ver17).
 - **Histórico e atomicidade:** as mutações de título, status e prioridade exigem ator/data UTC e retornam um evento apenas quando há mudança. Repetir o mesmo valor retorna `null`. `POST /api/tasks` grava a tarefa e um único evento `CriarTarefa` usando a `IUnitOfWork` e os repositórios existentes. Teste HTTP/SQL Server real provocou falha após salvar o histórico dentro da transação e confirmou que tarefa e histórico foram ambos revertidos.
 - **Autorização:** `POST /api/tasks` exige Administrador; identidade autora vem do `sub` validado. `GET /api/tasks/{id}` permite Administrador ou usuário igual ao criador/responsável. A matriz atual está em [escopo.md](escopo.md). SQL não substitui autorização da API.
+- **Consulta de histórico:** `GET /api/tasks/{id}/history` retorna `Id`, `TarefaId`, `UsuarioId`, `Acao`, `DataUtc` e `Descricao` por DTO público. O repositório filtra por tarefa, usa `AsNoTracking`, ordena por `DataUtc`/`Id`, executa `COUNT` e pagina no SQL Server (`page` 1-based, default 1; `pageSize` default 20, máximo 100). A API requer vínculo ou perfil Administrador; nenhum endpoint HTTP altera/remove histórico.
 - **Validação:** `CHECK` restringe enums, campos obrigatórios e GUIDs vazios; FKs garantem referências existentes. A validação C# de espaços e e-mail é mais completa que as verificações básicas SQL. O banco não reconhece se uma string realmente é um hash seguro; essa responsabilidade pertence ao futuro serviço de senhas. Não há senha de exemplo nem usuário inicial inserido.
 
 ## Estratégia única para criar o schema
@@ -87,7 +88,7 @@ O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao fi
 
 Os testes de persistência usam um banco efêmero `TaskFlowIntegrationTests_<GUID>`, criado e removido pelo fixture em servidor SQL Server real; o catálogo da connection string de teste é forçado para `master` antes de criar a base. O fixture aplica todas as migrations, limpa apenas suas próprias tabelas entre casos e remove somente a base que criou.
 
-Resultado final da suíte: 71 aprovados, 0 reprovados e 0 ignorados; 38 testes filtrados por `Category=SqlServer`, incluindo os novos fluxos HTTP que usam SQL isolado. O fixture cria `TaskFlowIntegrationTests_<GUID>`, aplica migrations existentes e remove somente o banco temporário. A evidência detalhada está no [diário](diario-desenvolvimento.md).
+Resultado final no Dia 5: 74 aprovados, 0 reprovados e 0 ignorados; 41 testes filtrados por `Category=SqlServer`, incluindo os fluxos HTTP de tarefas/histórico que usam SQL isolado. O fixture cria `TaskFlowIntegrationTests_<GUID>`, aplica migrations existentes e remove somente o banco temporário. A evidência detalhada está no [diário](diario-desenvolvimento.md).
 
 ## Objetos programáveis planejados
 

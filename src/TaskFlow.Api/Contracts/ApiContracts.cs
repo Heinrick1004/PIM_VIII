@@ -56,3 +56,17 @@ public sealed record PublicTaskResponse(
             Convert.ToBase64String(tarefa.RowVersion
                 ?? throw new InvalidOperationException("SQL Server did not generate a task row version.")));
 }
+
+public sealed record PublicTaskHistoryResponse(
+    Guid Id,
+    Guid TarefaId,
+    Guid UsuarioId,
+    string Acao,
+    DateTime DataUtc,
+    string? Descricao);
+
+public sealed record PagedTaskHistoryResponse(
+    IReadOnlyList<PublicTaskHistoryResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);

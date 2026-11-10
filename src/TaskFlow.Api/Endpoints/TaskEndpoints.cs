@@ -18,6 +18,7 @@ public static class TaskEndpoints
         group.MapPost("/", CreateAsync)
             .RequireAuthorization("Administrator");
         group.MapGet("/{id:guid}", GetByIdAsync);
+        group.MapGet("/{id:guid}/history", GetHistoryAsync);
         return group;
     }
 
@@ -149,6 +150,55 @@ public static class TaskEndpoints
         }
 
         return Results.Ok(PublicTaskResponse.From(task));
+    }
+
+    private static async Task<IResult> GetHistoryAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ITarefaRepository tasks,
+        IHistoricoTarefaRepository history,
+        CancellationToken cancellationToken,
+        int page = 1,
+        int pageSize = 20)
+    {
+        if (id == Guid.Empty)
+        {
+            return ValidationError("id", "O identificador da tarefa é inválido.");
+        }
+
+        if (page is < 1 or > 1_000_000 || pageSize is < 1 or > 100)
+        {
+            return ValidationError("pagination", "A página deve estar entre 1 e 1000000 e pageSize entre 1 e 100.");
+        }
+
+        var task = await tasks.GetByIdAsync(id, cancellationToken);
+        if (task is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!principal.IsInRole(nameof(PerfilUsuario.Administrador)))
+        {
+            var subject = principal.FindFirstValue("sub");
+            if (!Guid.TryParse(subject, out var userId)
+                || task.CriadorId != userId && task.ResponsavelId != userId)
+            {
+                return Results.Forbid();
+            }
+        }
+
+        var result = await history.ListPageByTarefaIdAsync(id, page, pageSize, cancellationToken);
+        return Results.Ok(new PagedTaskHistoryResponse(
+            result.History.Select(item => new PublicTaskHistoryResponse(
+                item.Id,
+                item.TarefaId,
+                item.UsuarioId,
+                item.Acao,
+                item.DataUtc,
+                item.Descricao)).ToArray(),
+            page,
+            pageSize,
+            result.TotalCount));
     }
 
     private static IResult ValidationError(string key, string message) =>

@@ -20,18 +20,37 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 4
+## Estado executado até o Dia 5
 
-- **Concluídas:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). `POST /api/tasks` e detalhe autorizado foram exercitados por HTTP real com SQL Server isolado.
+- **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
-- **Parciais ou planejadas:** US06 tem apenas consulta de detalhe; lista paginada/filtros, US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
+- **Parciais ou planejadas:** US06 tem consulta de detalhe e histórico paginado, mas ainda não possui listagem geral/filtros; US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
+
+## Revisão e retrospectiva da Sprint 1 — 10/11/2026
+
+Fechamento antecipado em relação à janela planejada (09–13/11), a pedido da etapa Dia 5. As histórias US01–US05 foram revistas contra seus critérios; a demonstração manual do bootstrap não é declarada como realizada e permanece uma pendência operacional explícita.
+
+| História | Critérios e resultado | Evidência verificada | Pendências |
+| --- | --- | --- | --- |
+| US01 — base e verificações | Solução em camadas, health/info, build/testes reproduzíveis e documentação existentes. **Concluída.** | Testes `ApiEndpointTests`; `dotnet restore/build/test`; árvore de projetos e documentos versionados. | Nenhuma pendência dos critérios da história. |
+| US02 — persistência SQL Server | Migrations EF Core são a estratégia oficial; modelo, FKs, unicidade, UTC, RowVersion e transações foram testados em SQL Server real. **Concluída.** | `SqlServerPersistenceTests`, `SqlServerTestDatabase` e histórico das migrations documentado nos Dias 2 e 5. | Não executar bootstrap manual em `TaskFlowDev` até o mantenedor configurar credenciais. |
+| US03 — autenticação/autorização | Hash apropriado, JWT validado, 401/403 e perfil corrente aplicado nas rotas. **Concluída.** | `AuthenticationEndpointTests`, `AdminBootstrapperTests`, `JwtSettingsTests`; suíte HTTP com SQL isolado. | Demonstração manual do login após configuração local do segredo e bootstrap. |
+| US04 — gerenciamento de usuários | Operações administrativas, e-mail duplicado, perfis, senha e proteção do último administrador testados. **Concluída.** | `AuthenticationEndpointTests` com middleware real e persistência SQL Server isolada. | CRUD permanece sem exclusão definitiva, conforme o escopo. |
+| US05 — criação/atribuição de tarefas | Tarefa Pendente, validação, autoria pelo JWT, responsável existente opcional e histórico de criação na mesma transação. **Concluída.** | `TaskEndpointTests`: fluxo HTTP, persistência, evento único, RowVersion e teste de rollback; Dia 5 acrescenta consulta protegida do histórico. | Demonstração manual em Swagger/`TaskFlowDev`; nenhuma credencial permanente foi criada. |
+
+### Retrospectiva objetiva
+
+- **Funcionou:** manter o SQL Server real como critério de persistência; os fixtures temporários isolados permitiram exercitar middleware, FKs, transação e autorização sem escrever em `TaskFlowDev`. Repositórios e unidade de trabalho existentes foram reutilizados sem introduzir outra camada.
+- **Dificuldades:** o mapeamento inicial de RowVersion e salvamentos individuais por repositório exigiram correções na etapa de persistência; a validação integrada real ajudou a detectar essas falhas. A demonstração manual continua bloqueada pela ausência de credenciais escolhidas pelo mantenedor.
+- **Decisões mantidas:** migrations são a única evolução oficial do schema; histórico é gravado pela aplicação na transação, sem trigger duplicador; testes de escrita usam banco SQL Server efêmero; nenhum bootstrap automático.
+- **Ação para Sprint 2:** priorizar listagem paginada/filtros e atualizações com RowVersion e histórico. A consulta de detalhe e o histórico paginado já foram antecipados; revisar capacidade antes de iniciar interfaces e objetos SQL planejados.
 
 ## Plano das três sprints
 
 | Sprint | Período planejado | Objetivo | Backlog selecionado | Revisão prevista |
 | --- | --- | --- | --- | --- |
-| S1 | 09–13/11/2026 | Base, persistência e primeiro fluxo autenticado de cadastro | US01–US05 | API com autenticação e criação persistida de tarefas, conforme capacidade real |
-| S2 | 14–18/11/2026 | Consulta, atualização, histórico e uso pela web | US06–US09 | Fluxo web integrado, concorrência e evidências SQL |
+| S1 | 09–13/11/2026 (fechada em 10/11) | Base, persistência e primeiro fluxo autenticado de cadastro | US01–US05 | Critérios revistos; testes SQL/HTTP passaram; demonstração manual pendente |
+| S2 | 14–18/11/2026 | Listagem/filtros, atualização concorrente, uso pela web e objetos SQL conforme capacidade | US06–US09 | Priorizar APIs e concorrência antes de assumir entrega de interface/objetos SQL |
 | S3 | 19–22/11/2026 | Clientes mínimos, execução em nuvem e fechamento | US10–US13 | Demonstração integrada, documentação e pendências explícitas |
 
 US01 é o escopo desta execução do Dia 1. A atribuição de uma história à sprint não indica conclusão. O quadro deverá registrar estados `A fazer`, `Em andamento`, `Em revisão` e `Concluído`, com responsável e evidência de cada item. O diário registra o que foi efetivamente entregue.

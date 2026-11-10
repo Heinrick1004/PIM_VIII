@@ -4,11 +4,11 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 4 — cadastro e atribuição de tarefas:** além da autenticação JWT e gestão administrativa de usuários, a API agora permite que somente administradores criem tarefas, opcionalmente atribuindo-as a funcionários. O criador vem exclusivamente do token validado; status inicia como Pendente; tarefa e evento `CriarTarefa` são persistidos na mesma transação. `GET /api/tasks/{id}` permite acesso a administradores e a funcionários vinculados como criador ou responsável. O bootstrap e a demonstração manual em `TaskFlowDev` permanecem dependentes de credenciais escolhidas pelo mantenedor. Nenhuma migration ou alteração de schema foi necessária.
+**Dia 5 — consulta de histórico e fechamento da Sprint 1:** `GET /api/tasks/{id}/history` retorna eventos paginados em ordem cronológica por `DataUtc` e `Id`, sem tracking EF. Administradores podem consultar qualquer histórico; funcionário somente se for criador ou responsável atual. A rota é somente leitura. Testes demonstram o fluxo completo de criação e atribuição, detalhe, histórico e autorização sobre SQL Server isolado. A Sprint 1 (US01–US05) foi revisada e fechada antecipadamente, com critérios e evidências registrados; a demonstração manual em `TaskFlowDev` continua pendente de credenciais do mantenedor. Nenhuma migration ou alteração de schema foi necessária.
 
-Validação final: **71 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. Os resultados detalhados, incluindo testes HTTP e SQL Server reais, estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+Validação final: **74 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. Os resultados detalhados, incluindo testes HTTP e SQL Server reais, estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
 
-`Category=Http` (32) e `Category=SqlServer` (38) se sobrepõem nos testes HTTP integrados que usam SQL isolado; os contadores filtrados não devem ser somados. `Category=Domain` teve 25 e `Category=Security` teve 2.
+`Category=Http` (35) e `Category=SqlServer` (41) se sobrepõem nos testes HTTP integrados que usam SQL isolado; os contadores filtrados não devem ser somados. `Category=Domain` teve 25 e `Category=Security` teve 2.
 
 ## Tecnologias e requisitos
 
@@ -74,16 +74,19 @@ Invoke-RestMethod http://localhost:5046/api/info
 | `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
 | `POST /api/tasks` | Somente Administrador; cria tarefa e histórico atomicamente; responsável funcionário opcional |
 | `GET /api/tasks/{id}` | JWT obrigatório; Administrador consulta qualquer tarefa, funcionário somente se criador ou responsável |
+| `GET /api/tasks/{id}/history` | JWT obrigatório; mesma regra de visibilidade, histórico somente leitura e paginação `page` (1) / `pageSize` (20, máximo 100) |
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-Rotas administrativas retornam 401 sem token e 403 para funcionário. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. A resposta de tarefa apresenta RowVersion em Base64. A lista paginada, atualizações/reatribuições e consulta de histórico por rota ainda não foram implementadas. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. A resposta de tarefa apresenta RowVersion em Base64. A listagem geral paginada, atualizações/reatribuições e endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+
+O histórico retorna `{ items, page, pageSize, totalCount }`; cada item contém `id`, `tarefaId`, `usuarioId`, `acao`, `dataUtc` e `descricao`. A ordenação é ascendente por data UTC e Id para desempate.
 
 ## Banco e configuração
 
 **EF Core migrations são o único mecanismo oficial de criação/evolução do schema.** `database/scripts/001_schema.sql` permanece somente como referência e não foi executado. `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`; não se usa `EnsureCreated()` nem migração automática no startup. O banco existente foi preservado.
 
-Em Development, a API lê `ConnectionStrings:TaskFlow` de `src/TaskFlow.Api/appsettings.Development.json` e usa autenticação integrada para `TaskFlowDev`; não há senha no repositório. Ambientes sem essa configuração falham explicitamente. A suíte SQL cria um banco temporário `TaskFlowIntegrationTests_<GUID>` por execução, aplica migrations e remove apenas esse banco gerado. Nunca usa `TaskFlowDev`. Para outro SQL Server, defina `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório; a conta precisa de permissão para criar e remover bancos de teste. Credenciais de usuários e hashes não são fornecidos.
+Em Development, a API lê `ConnectionStrings:TaskFlow` de `src/TaskFlow.Api/appsettings.Development.json` e usa autenticação integrada para `TaskFlowDev`; não há senha no repositório. Ambientes sem essa configuração falham explicitamente. A suíte SQL cria um banco temporário `TaskFlowIntegrationTests_<GUID>` por execução, aplica migrations e remove apenas esse banco gerado. Testes automatizados não conectam nem escrevem em `TaskFlowDev`; o teste de configuração verifica apenas o catálogo informado. Para outro SQL Server, defina `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório; a conta precisa de permissão para criar e remover bancos de teste. Credenciais de usuários e hashes não são fornecidos.
 
 ### Segredo JWT e primeiro administrador (PowerShell)
 
@@ -126,4 +129,4 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Securi
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar consulta paginada e alterações de tarefas no Dia 5/6. Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar listagem paginada e atualizações de tarefa na Sprint 2. Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.

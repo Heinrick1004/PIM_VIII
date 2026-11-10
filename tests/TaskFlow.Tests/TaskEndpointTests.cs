@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TaskFlow.Api.Authentication;
 using TaskFlow.Api.Contracts;
+using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Contracts;
 using TaskFlow.Domain.Entities;
 using TaskFlow.Domain.Enums;
@@ -244,6 +245,177 @@ public sealed class TaskEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, notFoundResponse.StatusCode);
     }
 
+    [Fact]
+    public async Task AdminCreatorAndAssignee_CanReadHistoryButAnonymousAndUnlinkedUsersCannot()
+    {
+        await _database.ResetAsync();
+        Assert.StartsWith("TaskFlowIntegrationTests_", _database.DatabaseName);
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var creator = await SeedUserAsync("Creator", "creator@task.test", PerfilUsuario.Funcionario);
+        var assignee = await SeedUserAsync("Assignee", "assignee@task.test", PerfilUsuario.Funcionario);
+        var outsider = await SeedUserAsync("Outsider", "outsider@task.test", PerfilUsuario.Funcionario);
+        await using var factory = CreateFactory();
+
+        using var adminClient = await LoginAsync(factory, admin.Email);
+        using var createdEmployee = await adminClient.PostAsJsonAsync("/api/users", new
+        {
+            nome = "New Employee",
+            email = "new-employee@task.test",
+            senha = Password,
+            perfil = PerfilUsuario.Funcionario
+        });
+        Assert.Equal(HttpStatusCode.Created, createdEmployee.StatusCode);
+        var employee = await createdEmployee.Content.ReadFromJsonAsync<PublicUserResponse>();
+        Assert.NotNull(employee);
+
+        using var createdTask = await adminClient.PostAsJsonAsync("/api/tasks", new
+        {
+            titulo = "Sprint review task",
+            prioridade = PrioridadeTarefa.Media,
+            responsavelId = employee.Id
+        });
+        Assert.Equal(HttpStatusCode.Created, createdTask.StatusCode);
+        var task = await createdTask.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(task);
+        var creatorTask = await SeedTaskAsync(creator.Id);
+        await using (var historyContext = _database.CreateContext())
+        {
+            await new HistoricoTarefaRepository(historyContext).AddAsync(
+                NewHistory(
+                    creatorTask.Id,
+                    creator.Id,
+                    DateTime.UtcNow,
+                    "CriarTarefa",
+                    Guid.NewGuid().ToString()));
+        }
+
+        using var detail = await adminClient.GetAsync($"/api/tasks/{task.Id}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        using var adminHistory = await adminClient.GetAsync($"/api/tasks/{task.Id}/history");
+        Assert.Equal(HttpStatusCode.OK, adminHistory.StatusCode);
+        var adminResult = await adminHistory.Content.ReadFromJsonAsync<PagedTaskHistoryResponse>();
+        Assert.NotNull(adminResult);
+        Assert.Equal(1, adminResult.TotalCount);
+        var creationEvent = Assert.Single(adminResult.Items);
+        Assert.Equal(task.Id, creationEvent.TarefaId);
+        Assert.Equal(admin.Id, creationEvent.UsuarioId);
+        Assert.Equal("CriarTarefa", creationEvent.Acao);
+        Assert.Equal("Tarefa criada.", creationEvent.Descricao);
+        Assert.Equal(DateTimeKind.Utc, creationEvent.DataUtc.Kind);
+
+        using var creatorClient = await LoginAsync(factory, creator.Email);
+        using var assigneeClient = await LoginAsync(factory, employee.Email);
+        using var outsiderClient = await LoginAsync(factory, outsider.Email);
+        using var anonymousClient = factory.CreateClient();
+        using var creatorHistory = await creatorClient.GetAsync($"/api/tasks/{creatorTask.Id}/history");
+        using var assigneeDetail = await assigneeClient.GetAsync($"/api/tasks/{task.Id}");
+        using var assigneeHistory = await assigneeClient.GetAsync($"/api/tasks/{task.Id}/history");
+        using var outsiderHistory = await outsiderClient.GetAsync($"/api/tasks/{task.Id}/history");
+        using var anonymousHistory = await anonymousClient.GetAsync($"/api/tasks/{task.Id}/history");
+        using var missingTask = await adminClient.GetAsync($"/api/tasks/{Guid.NewGuid()}/history");
+        using var emptyId = await adminClient.GetAsync($"/api/tasks/{Guid.Empty}/history");
+        using var malformedId = await adminClient.GetAsync("/api/tasks/not-a-guid/history");
+        using var attemptedHistoryWrite = await adminClient.PostAsJsonAsync(
+            $"/api/tasks/{task.Id}/history",
+            new { acao = "Alterar histórico" });
+        using var attemptedHistoryDelete = await adminClient.DeleteAsync($"/api/tasks/{task.Id}/history");
+
+        Assert.Equal(HttpStatusCode.OK, creatorHistory.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, assigneeDetail.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, assigneeHistory.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, outsiderHistory.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousHistory.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missingTask.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, emptyId.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, malformedId.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, attemptedHistoryWrite.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, attemptedHistoryDelete.StatusCode);
+
+        await using var context = _database.CreateContext();
+        var storedTask = await context.Tarefas.SingleAsync(item => item.Id == task.Id);
+        Assert.Equal(admin.Id, storedTask.CriadorId);
+        Assert.Equal(employee.Id, storedTask.ResponsavelId);
+        var storedHistory = await context.HistoricoTarefas
+            .Where(item => item.TarefaId == task.Id)
+            .ToListAsync();
+        var singleEvent = Assert.Single(storedHistory);
+        Assert.Equal(admin.Id, singleEvent.UsuarioId);
+    }
+
+    [Fact]
+    public async Task History_ReturnsEmptyPagedCollectionForExistingTaskWithoutEvents()
+    {
+        await _database.ResetAsync();
+        var creator = await SeedUserAsync("Creator", "creator@task.test", PerfilUsuario.Funcionario);
+        var task = await SeedTaskAsync(creator.Id);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, creator.Email);
+
+        using var response = await client.GetAsync($"/api/tasks/{task.Id}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<PagedTaskHistoryResponse>();
+        Assert.NotNull(result);
+        Assert.Empty(result.Items);
+        Assert.Equal(0, result.TotalCount);
+        Assert.Equal(1, result.Page);
+        Assert.Equal(20, result.PageSize);
+    }
+
+    [Fact]
+    public async Task History_PaginatesInUtcOrderWithIdAsDeterministicTieBreaker()
+    {
+        await _database.ResetAsync();
+        var creator = await SeedUserAsync("Creator", "creator@task.test", PerfilUsuario.Funcionario);
+        var task = await SeedTaskAsync(creator.Id);
+        var sharedUtc = new DateTime(2026, 11, 10, 12, 0, 0, DateTimeKind.Utc);
+        var entries = new[]
+        {
+            NewHistory(task.Id, creator.Id, sharedUtc.AddSeconds(1), "Later", "00000000-0000-0000-0000-000000000004"),
+            NewHistory(task.Id, creator.Id, sharedUtc, "Second", "00000000-0000-0000-0000-000000000002"),
+            NewHistory(task.Id, creator.Id, sharedUtc, "First", "00000000-0000-0000-0000-000000000001"),
+            NewHistory(task.Id, creator.Id, sharedUtc.AddSeconds(1), "Later first", "00000000-0000-0000-0000-000000000003")
+        };
+        await using (var context = _database.CreateContext())
+        {
+            var repository = new HistoricoTarefaRepository(context);
+            foreach (var entry in entries)
+            {
+                await repository.AddAsync(entry);
+            }
+        }
+
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, creator.Email);
+        using var firstResponse = await client.GetAsync($"/api/tasks/{task.Id}/history?page=1&pageSize=2");
+        using var secondResponse = await client.GetAsync($"/api/tasks/{task.Id}/history?page=2&pageSize=2");
+        using var invalidPage = await client.GetAsync($"/api/tasks/{task.Id}/history?page=0");
+        using var invalidPageSize = await client.GetAsync($"/api/tasks/{task.Id}/history?pageSize=101");
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPage.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPageSize.StatusCode);
+
+        var firstPage = await firstResponse.Content.ReadFromJsonAsync<PagedTaskHistoryResponse>();
+        var secondPage = await secondResponse.Content.ReadFromJsonAsync<PagedTaskHistoryResponse>();
+        Assert.NotNull(firstPage);
+        Assert.NotNull(secondPage);
+        Assert.Equal(4, firstPage.TotalCount);
+        Assert.Equal(4, secondPage.TotalCount);
+        Assert.Equal(new[]
+        {
+            Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Guid.Parse("00000000-0000-0000-0000-000000000002")
+        }, firstPage.Items.Select(item => item.Id));
+        Assert.Equal(new[]
+        {
+            Guid.Parse("00000000-0000-0000-0000-000000000003"),
+            Guid.Parse("00000000-0000-0000-0000-000000000004")
+        }, secondPage.Items.Select(item => item.Id));
+        Assert.All(firstPage.Items.Concat(secondPage.Items), item => Assert.Equal(DateTimeKind.Utc, item.DataUtc.Kind));
+    }
+
     private async Task<Usuario> SeedUserAsync(string name, string email, PerfilUsuario profile)
     {
         var user = new Usuario(Guid.NewGuid(), name, email, "temporary", profile);
@@ -253,6 +425,26 @@ public sealed class TaskEndpointTests
         await context.SaveChangesAsync();
         return user;
     }
+
+    private async Task<Tarefa> SeedTaskAsync(Guid creatorId)
+    {
+        var task = new Tarefa(
+            Guid.NewGuid(),
+            "Task for history tests",
+            null,
+            StatusTarefa.Pendente,
+            PrioridadeTarefa.Media,
+            DateTime.UtcNow,
+            null,
+            creatorId,
+            null);
+        await using var context = _database.CreateContext();
+        await new TarefaRepository(context).AddAsync(task);
+        return task;
+    }
+
+    private static HistoricoTarefa NewHistory(Guid taskId, Guid userId, DateTime dateUtc, string action, string id) =>
+        new(Guid.Parse(id), taskId, userId, action, dateUtc, action);
 
     private static async Task<HttpResponseMessage> PostValidTaskAsync(HttpClient client) =>
         await client.PostAsJsonAsync("/api/tasks", new
@@ -323,5 +515,12 @@ public sealed class TaskEndpointTests
             Guid tarefaId,
             CancellationToken cancellationToken = default) =>
             _inner.GetByTarefaIdAsync(tarefaId, cancellationToken);
+
+        public Task<(IReadOnlyList<HistoricoTarefa> History, int TotalCount)> ListPageByTarefaIdAsync(
+            Guid tarefaId,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListPageByTarefaIdAsync(tarefaId, page, pageSize, cancellationToken);
     }
 }

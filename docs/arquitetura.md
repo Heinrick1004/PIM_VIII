@@ -9,7 +9,7 @@ Atualizada em 10/11/2026. A solução adota um monólito modular simples em ASP.
 | TaskFlow.Domain | Entidades Usuario, Tarefa e HistoricoTarefa, enums e invariantes locais | Nenhuma das outras camadas | Modelo e validações |
 | TaskFlow.Application | Contratos de repositório, unidade de trabalho e informações da aplicação | Domain | Contratos e informações |
 | TaskFlow.Infrastructure | Persistência SQL Server com EF Core, migrations e repositórios | Application, Domain | Persistência real implementada |
-| TaskFlow.Api | Rotas REST, JWT, autorização, contratos HTTP, DI e bootstrap explícito | Application, Infrastructure | Health/info, login, usuários, criação e detalhe autorizado de tarefas |
+| TaskFlow.Api | Rotas REST, JWT, autorização, contratos HTTP, DI e bootstrap explícito | Application, Infrastructure | Health/info, login, usuários, criação e consulta autorizada de tarefas/histórico |
 | TaskFlow.Tests | Testes de domínio, middleware HTTP e persistência SQL Server real isolada | Projetos sob teste | Testes automatizados |
 
 As referências da solução expressam a direção das dependências de compilação. A API é o ponto de composição; repositórios e unidade de trabalho são registrados por DI. Não há repositório genérico nem banco em memória para simular persistência.
@@ -56,6 +56,8 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 - Policies ASP.NET Core protegem `/api/users` com o perfil Administrador. Login tem rate limit de 10 tentativas por minuto por IP. `/health` e `/api/info` permanecem públicos.
 - `POST /api/tasks` exige policy Administrador; o criador é extraído do claim `sub` validado, nunca do DTO. Responsável opcional precisa ser usuário existente com perfil Funcionario. `GET /api/tasks/{id}` permite consulta a administradores e a usuários que sejam criador ou responsável.
 - DTOs de tarefa são separados das entidades; a resposta converte RowVersion binária em Base64. A criação persiste tarefa e evento `CriarTarefa` dentro da mesma `IUnitOfWork` transacional.
+- `GET /api/tasks/{id}/history` aplica a mesma regra de vínculo do detalhe e retorna DTOs paginados. A consulta SQL usa `AsNoTracking`, ordena por `DataUtc` e `Id`, conta e materializa apenas a página; a rota não expõe escrita ou exclusão de histórico.
+- US01–US05 foram revisadas ao fechar a Sprint 1; critérios, testes e a pendência de demonstração manual estão registrados no [backlog](backlog.md) e [diário](diario-desenvolvimento.md).
 - O bootstrap do primeiro administrador é comando local `--bootstrap-admin`, somente em Development e somente para `TaskFlowDev`; pede senha sem eco, é idempotente e nunca roda no startup.
 - Atualização de usuário usa transação serializável para preservar o último administrador. Não existe endpoint de remoção.
 - Concorrência otimista com `rowversion` de oito bytes está mapeada e testada em SQL Server; a resposta de tarefa expõe o token para uso posterior, mas edição e conflito HTTP de tarefa ainda não estão implementados.
@@ -66,6 +68,6 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 
 ## Evolução prevista
 
-As migrations existentes são a única estratégia oficial de evolução do schema. O Dia 4 não alterou schema nem executou migration; criação/histórico e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
+As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4 e 5 não alteraram schema nem executaram migration; criação/histórico, paginação e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
 
 Docker, Kubernetes, CI/CD e clientes web/mobile/desktop pertencem às próximas sprints; os diretórios reservados não representam infraestrutura implantada. Resultados medidos estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).

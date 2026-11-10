@@ -1,4 +1,24 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 5
+# Diagnóstico do ambiente e validação — Dias 1 a 6
+
+## Situação verificada no Dia 6 — 10/11/2026
+
+| Verificação | Resultado |
+| --- | --- |
+| Branch antes do trabalho | `main`, `HEAD` e `origin/main` no commit-base `617b51114243a7bfea21e56edebb9fe19f461de8`; worktree limpo antes da implementação. |
+| Restore | `dotnet restore TaskFlow.sln`: sucesso, todos os projetos atualizados. |
+| Build | `dotnet build TaskFlow.sln`: sucesso, 0 avisos e 0 erros. |
+| Suíte completa | `dotnet test TaskFlow.sln`: **76 aprovados, 0 reprovados, 0 ignorados**. |
+| Domínio | `Category=Domain`: 25 aprovados, 0 reprovados, 0 ignorados. |
+| HTTP | `Category=Http`: 37 aprovados, 0 reprovados, 0 ignorados. |
+| SQL Server | `Category=SqlServer`: 43 aprovados, 0 reprovados, 0 ignorados, usando SQL Server real e bancos temporários isolados. |
+| Segurança | `Category=Security`: 2 aprovados, 0 reprovados, 0 ignorados. |
+| Sobreposição | Testes de endpoints pertencem simultaneamente às categorias HTTP e SQL Server; resultados por categoria não devem ser somados. |
+| Testes do Dia 6 | Dois testes novos de endpoint/listagem passaram: visibilidade, filtros, ordenação, paginação, validação, isolamento SQL e atualização do perfil autenticado. |
+| Banco de teste | O fixture usa `TaskFlowIntegrationTests_<GUID>`, cria o catálogo para a execução e o remove ao terminar. |
+| `TaskFlowDev` e schema | A execução não acessou nem escreveu no banco de desenvolvimento. Nenhuma migration foi criada, alterada ou executada no Dia 6. |
+| Git e segredos | `git diff --check` passou; alterações limitadas ao endpoint, contrato/repositório, testes e documentação; nenhum segredo real foi adicionado. |
+
+US06 foi concluída após testes HTTP com JWT e consultas persistidas no SQL Server isolado. O detalhe das coberturas está em [backlog.md](backlog.md) e [diario-desenvolvimento.md](diario-desenvolvimento.md).
 
 ## Situação verificada no Dia 5 — 10/11/2026
 

@@ -12,7 +12,7 @@ O MVP deverá permitir que administradores distribuam trabalho e que funcionári
 
 **Dia 1:** solução .NET 8 em quatro camadas, entidades e validações fundamentais, API com `GET /health` e `GET /api/info`, testes básicos, schema SQL de referência e documentação. Resultados executados são registrados no diário e no diagnóstico do ambiente.
 
-**Estado após Dia 5:** persistência SQL Server com migrations, autenticação JWT, gerenciamento administrativo de usuários, criação administrativa de tarefas e histórico transacional, consulta de detalhe e histórico paginado com autorização por vínculo estão implementados e testados em SQL Server isolado. A Sprint 1 (US01–US05) foi revisada com critérios atendidos e evidências automatizadas; a demonstração manual em `TaskFlowDev` segue pendente. Listagem geral de tarefas, atualização/reatribuição, clientes, procedures/functions/triggers, Docker, Kubernetes e CI/CD continuam planejados.
+**Estado após Dia 6:** persistência SQL Server com migrations, autenticação JWT, gerenciamento administrativo de usuários, criação administrativa de tarefas e histórico transacional, consulta de detalhe/histórico e listagem de tarefas filtrada/paginada com autorização por vínculo estão implementados e testados em SQL Server isolado. A Sprint 1 (US01–US05) foi revisada; a Sprint 2 está em andamento. A demonstração manual em `TaskFlowDev` segue pendente. Atualização/reatribuição, clientes, procedures/functions/triggers, Docker, Kubernetes e CI/CD continuam planejados.
 
 Ficam fora do MVP: microserviços, CQRS, MediatR, múltiplas empresas, chat, anexos, notificações externas, recuperação de senha por e-mail, modo offline e relatórios analíticos avançados. Não haverá endpoints de sucesso para operações ainda não implementadas.
 
@@ -34,7 +34,7 @@ Os critérios abaixo descrevem o comportamento esperado do MVP. A coluna de situ
 | RF01 | Autenticar usuários e aplicar os perfis Administrador e Funcionario. Credenciais inválidas devem ser rejeitadas; rotas protegidas devem devolver 401/403 conforme o caso. | NET, BD | Implementado e testado com middleware JWT real; perfil revalidado no banco |
 | RF02 | Permitir que somente administradores cadastrem, consultem e alterem usuários. Nome e e-mail devem ser válidos; e-mail duplicado deve ser rejeitado; senhas devem ser transformadas em hash antes da persistência. | NET, BD | Endpoints implementados; senha hasheada; CRUD sem exclusão; SQL isolado testado |
 | RF03 | Permitir ao administrador cadastrar e atribuir tarefas com título de até 200 caracteres, descrição opcional, prioridade válida, prazo UTC opcional e criador identificado. Nova tarefa deve iniciar Pendente. | NET, BD | `POST /api/tasks` implementado e validado em SQL Server; histórico criado na mesma transação |
-| RF04 | Consultar tarefas por status e responsável, com paginação e visibilidade conforme a matriz de permissões. Uma consulta não pode expor tarefas de outros funcionários sem vínculo permitido. | NET, BD | Detalhe e histórico paginado com autorização implementados; listagem geral/filtros pendentes |
+| RF04 | Consultar tarefas por status e responsável, com paginação e visibilidade conforme a matriz de permissões. Uma consulta não pode expor tarefas de outros funcionários sem vínculo permitido. | NET, BD | Implementado: lista SQL paginada com status, prioridade, responsável, ausência de responsável e título; escopo aplicado antes de filtros/contagem/página |
 | RF05 | Permitir alterações conforme o perfil. Status deve ser Pendente, EmAndamento ou Concluida; prioridade deve ser Baixa, Media ou Alta. Uma versão desatualizada deve produzir conflito sem sobrescrever a versão atual. | NET, BD | Persistência/RowVersion testados no Dia 2; endpoints e resposta HTTP de conflito pendentes |
 | RF06 | Registrar criação e alterações relevantes de tarefas, identificando autor, ação, data UTC e descrição. A mudança e o registro devem ser confirmados na mesma transação; o histórico não pode ser editado pelo cliente. | NET, BD | Criação e rollback real integrados; consulta GET paginada e somente leitura; eventos de atualizações futuras pendentes |
 | RF07 | Disponibilizar web responsiva e clientes mínimos Flutter e desktop C#, consumindo a mesma API. Cada cliente deve permitir autenticação, consulta das tarefas permitidas e mudança de status de uma tarefa atribuída. | NET, CLOUD | Diretórios reservados; clientes planejados |
@@ -66,7 +66,7 @@ As rotas implementadas aplicam esta matriz na API. Para funcionário, “vincula
 | Bootstrap do primeiro administrador | Comando local explicitamente executado; apenas Development/TaskFlowDev | Não aplicável | Não aplicável |
 | Cadastrar e atribuir tarefa | Permitido; criador é o usuário autenticado e responsável funcionário é opcional | Negado | 401 |
 | Consultar detalhe `GET /api/tasks/{id}` | Qualquer tarefa | Somente se criador ou responsável atual | 401 |
-| Listar tarefas com filtros/paginação | Planejado | Planejado | 401 quando implementado |
+| `GET /api/tasks` | Todas as tarefas | Somente criadas pelo usuário ou atualmente atribuídas | 401 |
 | Consultar histórico `GET /api/tasks/{id}/history` | Qualquer tarefa | Somente tarefa criada ou atualmente atribuída | 401 |
 | Alterar título, descrição, prioridade, prazo ou responsável | Qualquer tarefa | Negado | Negado |
 | Alterar status | Qualquer tarefa | Somente se responsável atual | Negado |
@@ -79,6 +79,8 @@ Reatribuição remove do antigo responsável o acesso por responsabilidade; o v�
 Nenhum cliente terá acesso direto ao banco. A API deverá verificar permissões em cada operação; ocultar botões na interface não substitui essa validação. Unicidade de e-mail depende da persistência e da constraint SQL, não apenas de uma consulta prévia. Hashes nunca devem compor respostas públicas ou registros de auditoria.
 
 O histórico é somente leitura pela API. `GET /api/tasks/{id}/history` pagina os registros por `DataUtc` e, em caso de empate, por `Id`; `page` começa em 1 e `pageSize` default é 20, máximo 100. A consulta é filtrada no SQL Server e usa `AsNoTracking`.
+
+`GET /api/tasks` retorna `{ items, page, pageSize, totalCount }`, com filtros opcionais `status`, `prioridade`, `responsavelId`, `semResponsavel` e `titulo` combinados por AND. `page` começa em 1 (limite 1.000.000), `pageSize` default 20 (máximo 100); a ordenação é descendente por `CriadaEmUtc` e `Id`. O funcionário sempre recebe escopo SQL de criador ou responsável atual, independente dos filtros enviados; `semResponsavel=true` não pode ser combinado com `responsavelId`.
 
 JWT exige issuer, audience e chave HMAC externa em Base64 com ao menos 256 bits; a expiração é de 60 minutos. O perfil é revalidado no banco em cada requisição protegida. Login possui rate limit de 10 tentativas por minuto por IP. Ver [instruções de configuração](../README.md#segredo-jwt-e-primeiro-administrador-powershell) e os resultados em [ambiente](ambiente.md).
 

@@ -17,6 +17,7 @@ public static class TaskEndpoints
 
         group.MapPost("/", CreateAsync)
             .RequireAuthorization("Administrator");
+        group.MapGet("/", ListAsync);
         group.MapGet("/{id:guid}", GetByIdAsync);
         group.MapGet("/{id:guid}/history", GetHistoryAsync);
         return group;
@@ -150,6 +151,83 @@ public static class TaskEndpoints
         }
 
         return Results.Ok(PublicTaskResponse.From(task));
+    }
+
+    private static async Task<IResult> ListAsync(
+        ClaimsPrincipal principal,
+        ITarefaRepository tasks,
+        CancellationToken cancellationToken,
+        StatusTarefa? status = null,
+        Guid? responsavelId = null,
+        string? titulo = null,
+        int page = 1,
+        int pageSize = 20,
+        bool semResponsavel = false,
+        PrioridadeTarefa? prioridade = null)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (page is < 1 or > 1_000_000 || pageSize is < 1 or > 100)
+        {
+            errors["pagination"] = ["A página deve estar entre 1 e 1000000 e pageSize entre 1 e 100."];
+        }
+
+        if (status.HasValue && !Enum.IsDefined(status.Value))
+        {
+            errors["status"] = ["Informe um status válido."];
+        }
+
+        if (prioridade.HasValue && !Enum.IsDefined(prioridade.Value))
+        {
+            errors["prioridade"] = ["Informe uma prioridade válida."];
+        }
+
+        if (responsavelId == Guid.Empty)
+        {
+            errors["responsavelId"] = ["O identificador do responsável não pode ser vazio."];
+        }
+
+        if (semResponsavel && responsavelId.HasValue)
+        {
+            errors["responsavelId"] = ["Não combine responsavelId com semResponsavel=true."];
+        }
+
+        if (titulo?.Length > Tarefa.TituloMaxLength)
+        {
+            errors["titulo"] = [$"O título deve ter até {Tarefa.TituloMaxLength} caracteres."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        Guid? visibleUserId = null;
+        if (!principal.IsInRole(nameof(PerfilUsuario.Administrador)))
+        {
+            var subject = principal.FindFirstValue("sub");
+            if (!Guid.TryParse(subject, out var userId) || userId == Guid.Empty)
+            {
+                return Results.Unauthorized();
+            }
+
+            visibleUserId = userId;
+        }
+
+        var result = await tasks.ListPageAsync(
+            page,
+            pageSize,
+            visibleUserId,
+            status,
+            prioridade,
+            responsavelId,
+            semResponsavel,
+            titulo,
+            cancellationToken);
+        return Results.Ok(new PagedTasksResponse(
+            result.Tasks.Select(PublicTaskResponse.From).ToArray(),
+            page,
+            pageSize,
+            result.TotalCount));
     }
 
     private static async Task<IResult> GetHistoryAsync(

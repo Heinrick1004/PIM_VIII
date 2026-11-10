@@ -11,7 +11,7 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US03 | Como usuário, quero me autenticar para acessar somente operações do meu perfil. | P0 / 5 | RF01, RNF02 | Hash apropriado com salt; login inválido rejeitado; identidade autenticada no servidor; testes de 401 e 403; hash ausente das respostas e logs. | S1 |
 | US04 | Como administrador, quero gerenciar usuários para distribuir o trabalho entre pessoas cadastradas. | P1 / 3 | RF02, RNF02, RNF03 | Somente administrador cadastra/lista/altera; e-mail duplicado tratado; perfil validado; exclusão definitiva fora do MVP; nenhuma senha em texto puro. | S1 |
 | US05 | Como administrador, quero cadastrar e atribuir tarefas para organizar as demandas internas. | P1 / 5 | RF03, RF05, RF06 | Criação inicia Pendente; título, prioridade e usuários validados; prazo opcional em UTC; autor vem da identidade; criação e histórico confirmados na mesma transação. | S1 |
-| US06 | Como funcionário, quero consultar minhas tarefas para acompanhar prioridades e prazos. | P1 / 3 | RF04, RNF02 | Listagem paginada com filtros de status/responsável; funcionário vê apenas tarefas em que é criador ou responsável; administrador vê todas; tentativas de acesso sem vínculo são bloqueadas. | S2 |
+| US06 | Como funcionário, quero consultar minhas tarefas para acompanhar prioridades e prazos. | P1 / 3 | RF04, RNF02 | Listagem paginada com filtros combináveis de status, prioridade, responsável, título e sem responsável; funcionário vê apenas tarefas em que é criador ou responsável; administrador vê todas; filtros, contagem e paginação no SQL; ordenação estável. | S2 |
 | US07 | Como responsável, quero atualizar o status da minha tarefa com histórico e proteção contra sobrescrita. | P1 / 5 | RF05, RF06, RNF03, RNF04 | Matriz de permissões aplicada; alteração efetiva gera histórico; campos administrativos protegidos; versão antiga gera 409; falha no histórico desfaz a mudança; nenhum histórico duplicado. | S2 |
 | US08 | Como usuário, quero consultar tarefas em uma interface web responsiva. | P1 / 5 | RF07, RNF05 | Login, lista/detalhe e mudança de status integrados à API; usabilidade em 360 px e desktop; rótulos e teclado; erros reais apresentados ao usuário. | S2 |
 | US09 | Como avaliador, quero evidências de programação de banco para verificar procedures, functions, triggers e transações. | P2 / 5 | RF04, RF06, RNF03 | Implementar objetos SQL com finalidade definida, parâmetros e testes; procedure de consulta e function com uso demonstrado; trigger sem duplicar auditoria; cenário de commit/rollback documentado. | S2 |
@@ -20,11 +20,22 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 5
+## Estado executado até o Dia 6
 
 - **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
-- **Parciais ou planejadas:** US06 tem consulta de detalhe e histórico paginado, mas ainda não possui listagem geral/filtros; US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
+- **US06 concluída no Dia 6:** lista protegida com visibilidade por criador/responsável, filtros AND, contagem/paginação SQL, ordenação estável e testes HTTP/SQL Server isolados.
+- **Parciais ou planejadas:** US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
+
+### Revisão da US06 — Dia 6
+
+| Critério | Evidência verificada |
+| --- | --- |
+| Administrador lista todas as tarefas; funcionário vê somente tarefa criada ou atribuída a si | `TaskList_AppliesVisibilityFiltersAndPaginationInSqlServer` executa HTTP/JWT e lê dados de SQL Server temporário; inclui usuário criador e responsável simultaneamente sem duplicar item. |
+| Filtros de status, prioridade, responsável, título e sem responsável se combinam | Mesmo teste confirma filtros individuais e combinação AND; tentativa de usar responsável alheio não amplia o escopo do funcionário. |
+| Contagem, paginação e ordenação são estáveis e executadas em SQL | Teste confirma contagem total, páginas sem sobreposição, página além do total vazia e desempate por Id em tarefas com a mesma data de criação. |
+| Entradas inválidas são rejeitadas, autenticação é exigida e perfil corrente prevalece | Mesmo teste verifica 400 para limites/enums/combinação inválida, 401 anônimo; `TaskList_UsesCurrentDatabaseProfileForVisibility` verifica a revalidação de perfil. |
+| Isolamento e persistência reais | Testes usam `TaskFlowIntegrationTests_<GUID>` e consultam as tarefas persistidas; não usam EF InMemory nem `TaskFlowDev`. |
 
 ## Revisão e retrospectiva da Sprint 1 — 10/11/2026
 
@@ -50,7 +61,7 @@ Fechamento antecipado em relação à janela planejada (09–13/11), a pedido da
 | Sprint | Período planejado | Objetivo | Backlog selecionado | Revisão prevista |
 | --- | --- | --- | --- | --- |
 | S1 | 09–13/11/2026 (fechada em 10/11) | Base, persistência e primeiro fluxo autenticado de cadastro | US01–US05 | Critérios revistos; testes SQL/HTTP passaram; demonstração manual pendente |
-| S2 | 14–18/11/2026 | Listagem/filtros, atualização concorrente, uso pela web e objetos SQL conforme capacidade | US06–US09 | Priorizar APIs e concorrência antes de assumir entrega de interface/objetos SQL |
+| S2 | 14–18/11/2026 | Atualização concorrente, uso pela web e objetos SQL conforme capacidade | US07–US09 | US06 concluída; priorizar API/concorrência antes de assumir interface/objetos SQL |
 | S3 | 19–22/11/2026 | Clientes mínimos, execução em nuvem e fechamento | US10–US13 | Demonstração integrada, documentação e pendências explícitas |
 
 US01 é o escopo desta execução do Dia 1. A atribuição de uma história à sprint não indica conclusão. O quadro deverá registrar estados `A fazer`, `Em andamento`, `Em revisão` e `Concluído`, com responsável e evidência de cada item. O diário registra o que foi efetivamente entregue.
@@ -61,4 +72,4 @@ Uma história estará pronta quando seus critérios forem demonstrados, o códig
 
 Em cada dia, revisar progresso, impedimentos e capacidade. Ao final de cada sprint, demonstrar o incremento e realizar uma retrospectiva curta. Se houver atraso, reduzir acabamento e abrangência das interfaces antes de comprometer segurança, integridade, verificação ou a veracidade das evidências; renegociar qualquer retirada de requisito com a equipe/orientação.
 
-Dependências principais: US02 sustenta US04–US07; US03 está implementada e precede a exposição dos próximos casos de negócio; US06–US07 sustentam US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md) e as execuções verificadas no [diário](diario-desenvolvimento.md).
+Dependências principais: US02 sustenta US04–US07; US03 está implementada e precede a exposição dos próximos casos de negócio; US06 está concluída e US07 sustenta US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md) e as execuções verificadas no [diário](diario-desenvolvimento.md).

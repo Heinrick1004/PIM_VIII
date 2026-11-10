@@ -1,6 +1,6 @@
-# Modelo de dados — atualizado no Dia 5
+# Modelo de dados — atualizado no Dia 6
 
-Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. O Dia 4 adicionou endpoints de criação e consulta de detalhe sem alterar entidades, schema ou migrations.
+Referência: 10/11/2026. O EF Core 10 está integrado à API e ao SQL Server. As migrations oficiais `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`. O script SQL permanece apenas como referência e não foi aplicado. Os Dias 4–6 adicionaram criação, detalhe, histórico e listagem paginada sem alterar entidades, schema ou migrations.
 
 ## Relacionamentos
 
@@ -78,6 +78,7 @@ O índice `IX_Tarefas_Status_ResponsavelId (Status, ResponsavelId)` atende ao fi
 - **Histórico e atomicidade:** as mutações de título, status e prioridade exigem ator/data UTC e retornam um evento apenas quando há mudança. Repetir o mesmo valor retorna `null`. `POST /api/tasks` grava a tarefa e um único evento `CriarTarefa` usando a `IUnitOfWork` e os repositórios existentes. Teste HTTP/SQL Server real provocou falha após salvar o histórico dentro da transação e confirmou que tarefa e histórico foram ambos revertidos.
 - **Autorização:** `POST /api/tasks` exige Administrador; identidade autora vem do `sub` validado. `GET /api/tasks/{id}` permite Administrador ou usuário igual ao criador/responsável. A matriz atual está em [escopo.md](escopo.md). SQL não substitui autorização da API.
 - **Consulta de histórico:** `GET /api/tasks/{id}/history` retorna `Id`, `TarefaId`, `UsuarioId`, `Acao`, `DataUtc` e `Descricao` por DTO público. O repositório filtra por tarefa, usa `AsNoTracking`, ordena por `DataUtc`/`Id`, executa `COUNT` e pagina no SQL Server (`page` 1-based, default 1; `pageSize` default 20, máximo 100). A API requer vínculo ou perfil Administrador; nenhum endpoint HTTP altera/remove histórico.
+- **Listagem de tarefas:** `GET /api/tasks` aplica escopo de visibilidade no SQL (`CriadorId` ou responsável autenticado para funcionário) antes dos filtros, `COUNT` e paginação. Status, prioridade, responsável, ausência de responsável e título são combinados. Resultado ordenado por `CriadaEmUtc`/`Id` descendentes; `page` 1-based (default 1, máximo 1.000.000), `pageSize` default 20/máximo 100. Consultas são `AsNoTracking`; nenhuma migration ou índice novo foi necessário.
 - **Validação:** `CHECK` restringe enums, campos obrigatórios e GUIDs vazios; FKs garantem referências existentes. A validação C# de espaços e e-mail é mais completa que as verificações básicas SQL. O banco não reconhece se uma string realmente é um hash seguro; essa responsabilidade pertence ao futuro serviço de senhas. Não há senha de exemplo nem usuário inicial inserido.
 
 ## Estratégia única para criar o schema

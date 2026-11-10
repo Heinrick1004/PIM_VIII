@@ -189,3 +189,29 @@ A revisão antecipada de 10/11 concluiu US01–US05 com critérios cobertos pelo
 - **Dificuldades observadas:** mapeamento de RowVersion, atomicidade entre chamadas individuais de `SaveChangesAsync` e validações HTTP integradas exigiram correções nos dias anteriores. Os contratos reaproveitaram a unidade de trabalho/repositórios, sem acrescentar camadas.
 - **Decisões:** migrations continuam sendo a única estratégia de schema; a aplicação é a única origem do evento, sem triggers de auditoria; histórico é paginado no servidor e somente leitura.
 - **Ajuste da Sprint 2:** priorizar listagem geral/filtros e atualização com RowVersion e histórico. A consulta de detalhe e histórico paginado foram antecipadas. Rever escopo de web e programação SQL diante da capacidade e dependências, sem declarar implementação antes de testá-la.
+
+## Dia 6 — listagem segura de tarefas (implementado em 10/11/2026)
+
+### Implementação
+
+- Implementado `GET /api/tasks`, protegido por autenticação, com resposta pública paginada (`items`, `page`, `pageSize`, `totalCount`) e RowVersion em Base64.
+- O repositório faz filtragem, contagem, ordenação e paginação na consulta SQL com `AsNoTracking`. Administrador recebe o escopo global; o funcionário recebe `CriadorId == sub autenticado OR ResponsavelId == sub autenticado` antes de qualquer filtro ou contagem.
+- Filtros opcionais combináveis por AND: status, prioridade, responsável, título e `semResponsavel=true`. O filtro de responsável não amplia o acesso; `semResponsavel` combinado com `responsavelId` é rejeitado.
+- Paginação: página 1 por padrão, limite 1.000.000; `pageSize` padrão 20, máximo 100. Ordenação descendente por `CriadaEmUtc` e `Id`, evitando resultados ambíguos em datas iguais. Página além do fim retorna itens vazios e a contagem filtrada.
+- Nenhuma migration/índice novo foi necessário. Os testes usam fixture com SQL Server real em catálogo descartável `TaskFlowIntegrationTests_<GUID>`; `TaskFlowDev` não foi acessado nem alterado.
+
+### Evidências de teste e validação
+
+| Verificação | Resultado |
+| --- | --- |
+| Restore | `dotnet restore TaskFlow.sln`: sucesso |
+| Build | `dotnet build TaskFlow.sln`: sucesso; 0 avisos, 0 erros |
+| Testes completos | 76 aprovados, 0 reprovados, 0 ignorados |
+| Domain / HTTP / SQL Server / Security | 25 / 37 / 43 / 2 aprovados; HTTP e SQL Server se sobrepõem |
+| Testes novos | 2 testes HTTP/SQL Server: `TaskList_AppliesVisibilityFiltersAndPaginationInSqlServer` e `TaskList_UsesCurrentDatabaseProfileForVisibility`; ambos aprovados |
+| Integridade/isolamento | Dados consultados no SQL Server temporário; anônimo 401; funcionário restrito; filtros e paginação testados; perfil corrente do banco reavaliado após alteração. |
+| Repositório | `git diff --check` aprovado; migrations sem alterações; nenhum segredo real foi adicionado. |
+
+### Critérios US06 e próximos passos
+
+US06 está concluída: visibilidade de administrador/funcionário, filtros AND, contagem e paginação SQL, desempate determinístico, validação de entrada e revalidação de perfil foram exercitados com HTTP e persistência real. A Sprint 2 permanece aberta; próxima prioridade é US07, atualização concorrente com RowVersion e gravação atômica do histórico. Depois, reavaliar web e programação SQL pela capacidade disponível, sem declarar entregas ainda não executadas.

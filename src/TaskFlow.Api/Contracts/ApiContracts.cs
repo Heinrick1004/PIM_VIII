@@ -70,3 +70,9 @@ public sealed record PagedTaskHistoryResponse(
     int Page,
     int PageSize,
     int TotalCount);
+
+public sealed record PagedTasksResponse(
+    IReadOnlyList<PublicTaskResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount);

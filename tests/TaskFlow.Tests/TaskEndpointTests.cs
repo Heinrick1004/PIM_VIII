@@ -416,6 +416,183 @@ public sealed class TaskEndpointTests
         Assert.All(firstPage.Items.Concat(secondPage.Items), item => Assert.Equal(DateTimeKind.Utc, item.DataUtc.Kind));
     }
 
+    [Fact]
+    public async Task TaskList_AppliesVisibilityFiltersAndPaginationInSqlServer()
+    {
+        await _database.ResetAsync();
+        Assert.StartsWith("TaskFlowIntegrationTests_", _database.DatabaseName);
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var employee = await SeedUserAsync("Employee", "employee@task.test", PerfilUsuario.Funcionario);
+        var otherEmployee = await SeedUserAsync("Other", "other@task.test", PerfilUsuario.Funcionario);
+        var sharedCreatedAt = new DateTime(2026, 11, 10, 12, 0, 0, DateTimeKind.Utc);
+
+        await SeedTaskAsync(
+            employee.Id, "Alpha shared", StatusTarefa.Pendente, employee.Id, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000001");
+        await SeedTaskAsync(
+            admin.Id, "Beta assigned", StatusTarefa.EmAndamento, employee.Id, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000002",
+            priority: PrioridadeTarefa.Alta);
+        await SeedTaskAsync(
+            employee.Id, "Gamma authored", StatusTarefa.Concluida, null, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000003");
+        await SeedTaskAsync(
+            otherEmployee.Id, "Alpha unrelated", StatusTarefa.Pendente, otherEmployee.Id, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000004");
+        await SeedTaskAsync(
+            admin.Id, "Unassigned admin", StatusTarefa.Pendente, null, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000005");
+        await SeedTaskAsync(
+            admin.Id, "Alpha other assignee", StatusTarefa.Pendente, otherEmployee.Id, sharedCreatedAt,
+            id: "00000000-0000-0000-0000-000000000006");
+
+        await using var factory = CreateFactory();
+        using var anonymous = factory.CreateClient();
+        using var anonymousResponse = await anonymous.GetAsync("/api/tasks");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+
+        using var adminClient = await LoginAsync(factory, admin.Email);
+        using var employeeClient = await LoginAsync(factory, employee.Email);
+        using var adminAllResponse = await adminClient.GetAsync("/api/tasks");
+        using var employeeAllResponse = await employeeClient.GetAsync("/api/tasks");
+        Assert.Equal(HttpStatusCode.OK, adminAllResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, employeeAllResponse.StatusCode);
+
+        var adminAll = await adminAllResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        var employeeAll = await employeeAllResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(adminAll);
+        Assert.NotNull(employeeAll);
+        Assert.Equal(6, adminAll.TotalCount);
+        Assert.Equal(6, adminAll.Items.Count);
+        Assert.Equal(1, adminAll.Page);
+        Assert.Equal(20, adminAll.PageSize);
+        Assert.All(adminAll.Items, item => Assert.Equal(8, Convert.FromBase64String(item.RowVersion).Length));
+        Assert.Equal(3, employeeAll.TotalCount);
+        Assert.Equal(3, employeeAll.Items.Count);
+        Assert.Equal(3, employeeAll.Items.Select(item => item.Id).Distinct().Count());
+        Assert.Contains(employeeAll.Items, item => item.Titulo == "Alpha shared");
+        Assert.Contains(employeeAll.Items, item => item.Titulo == "Beta assigned");
+        Assert.Contains(employeeAll.Items, item => item.Titulo == "Gamma authored");
+        Assert.DoesNotContain(employeeAll.Items, item => item.Titulo is "Alpha unrelated" or "Unassigned admin" or "Alpha other assignee");
+        Assert.All(adminAll.Items, item => Assert.Equal(DateTimeKind.Utc, item.CriadaEmUtc.Kind));
+
+        using var unassignedResponse = await adminClient.GetAsync("/api/tasks?semResponsavel=true");
+        var unassigned = await unassignedResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.Equal(HttpStatusCode.OK, unassignedResponse.StatusCode);
+        Assert.NotNull(unassigned);
+        Assert.Equal(2, unassigned.TotalCount);
+        Assert.All(unassigned.Items, item => Assert.Null(item.ResponsavelId));
+
+        using var employeeUnassignedResponse = await employeeClient.GetAsync("/api/tasks?semResponsavel=true");
+        var employeeUnassigned = await employeeUnassignedResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(employeeUnassigned);
+        Assert.Equal(1, employeeUnassigned.TotalCount);
+        Assert.Equal("Gamma authored", Assert.Single(employeeUnassigned.Items).Titulo);
+
+        using var statusResponse = await employeeClient.GetAsync($"/api/tasks?status={(byte)StatusTarefa.Pendente}");
+        var statusPage = await statusResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(statusPage);
+        Assert.Equal(1, statusPage.TotalCount);
+        Assert.Equal(StatusTarefa.Pendente, Assert.Single(statusPage.Items).Status);
+
+        using var priorityResponse = await employeeClient.GetAsync($"/api/tasks?prioridade={(byte)PrioridadeTarefa.Alta}");
+        var priorityPage = await priorityResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(priorityPage);
+        Assert.Equal("Beta assigned", Assert.Single(priorityPage.Items).Titulo);
+
+        using var titleResponse = await employeeClient.GetAsync("/api/tasks?titulo=Gamma");
+        var titlePage = await titleResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(titlePage);
+        Assert.Equal("Gamma authored", Assert.Single(titlePage.Items).Titulo);
+
+        using var combinedResponse = await employeeClient.GetAsync(
+            $"/api/tasks?status={(byte)StatusTarefa.EmAndamento}&responsavelId={employee.Id}&titulo=Beta&prioridade={(byte)PrioridadeTarefa.Alta}");
+        var combined = await combinedResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(combined);
+        Assert.Equal(1, combined.TotalCount);
+        Assert.Equal("Beta assigned", Assert.Single(combined.Items).Titulo);
+
+        using var cannotWidenResponse = await employeeClient.GetAsync($"/api/tasks?responsavelId={otherEmployee.Id}");
+        var cannotWiden = await cannotWidenResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(cannotWiden);
+        Assert.Equal(0, cannotWiden.TotalCount);
+        Assert.Empty(cannotWiden.Items);
+
+        using var firstPageResponse = await adminClient.GetAsync("/api/tasks?page=1&pageSize=2");
+        using var secondPageResponse = await adminClient.GetAsync("/api/tasks?page=2&pageSize=2");
+        using var beyondResponse = await adminClient.GetAsync("/api/tasks?page=20&pageSize=2");
+        var firstPage = await firstPageResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        var secondPage = await secondPageResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        var beyondPage = await beyondResponse.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(firstPage);
+        Assert.NotNull(secondPage);
+        Assert.NotNull(beyondPage);
+        Assert.Equal(6, firstPage.TotalCount);
+        Assert.Equal(6, secondPage.TotalCount);
+        Assert.Equal(new[]
+        {
+            Guid.Parse("00000000-0000-0000-0000-000000000006"),
+            Guid.Parse("00000000-0000-0000-0000-000000000005")
+        }, firstPage.Items.Select(item => item.Id));
+        Assert.Equal(new[]
+        {
+            Guid.Parse("00000000-0000-0000-0000-000000000004"),
+            Guid.Parse("00000000-0000-0000-0000-000000000003")
+        }, secondPage.Items.Select(item => item.Id));
+        Assert.Empty(beyondPage.Items);
+        Assert.Equal(6, beyondPage.TotalCount);
+
+        foreach (var invalidQuery in new[]
+        {
+            "/api/tasks?page=0",
+            "/api/tasks?page=1000001",
+            "/api/tasks?pageSize=0",
+            "/api/tasks?pageSize=101",
+            "/api/tasks?status=99",
+            "/api/tasks?prioridade=0",
+            "/api/tasks?responsavelId=00000000-0000-0000-0000-000000000000",
+            "/api/tasks?titulo=" + new string('x', Tarefa.TituloMaxLength + 1),
+            $"/api/tasks?responsavelId={otherEmployee.Id}&semResponsavel=true"
+        })
+        {
+            using var invalidResponse = await adminClient.GetAsync(invalidQuery);
+            Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+        }
+
+        await using var context = _database.CreateContext();
+        Assert.Equal(6, await context.Tarefas.CountAsync());
+        Assert.Equal(_database.DatabaseName, context.Database.GetDbConnection().Database);
+    }
+
+    [Fact]
+    public async Task TaskList_UsesCurrentDatabaseProfileForVisibility()
+    {
+        await _database.ResetAsync();
+        var employee = await SeedUserAsync("Employee", "employee@task.test", PerfilUsuario.Funcionario);
+        var other = await SeedUserAsync("Other", "other@task.test", PerfilUsuario.Funcionario);
+        await SeedTaskAsync(other.Id, "Other task", StatusTarefa.Pendente, other.Id, DateTime.UtcNow);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, employee.Email);
+
+        using var beforePromotion = await client.GetAsync("/api/tasks");
+        var employeePage = await beforePromotion.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(employeePage);
+        Assert.Equal(0, employeePage.TotalCount);
+
+        await using (var context = _database.CreateContext())
+        {
+            var storedEmployee = await context.Usuarios.SingleAsync(user => user.Id == employee.Id);
+            storedEmployee.UpdateProfile(storedEmployee.Nome, storedEmployee.Email, PerfilUsuario.Administrador);
+            await context.SaveChangesAsync();
+        }
+
+        using var afterPromotion = await client.GetAsync("/api/tasks");
+        var adminPage = await afterPromotion.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(adminPage);
+        Assert.Equal(1, adminPage.TotalCount);
+        Assert.Equal("Other task", Assert.Single(adminPage.Items).Titulo);
+    }
+
     private async Task<Usuario> SeedUserAsync(string name, string email, PerfilUsuario profile)
     {
         var user = new Usuario(Guid.NewGuid(), name, email, "temporary", profile);
@@ -426,18 +603,25 @@ public sealed class TaskEndpointTests
         return user;
     }
 
-    private async Task<Tarefa> SeedTaskAsync(Guid creatorId)
+    private async Task<Tarefa> SeedTaskAsync(
+        Guid creatorId,
+        string title = "Task for history tests",
+        StatusTarefa status = StatusTarefa.Pendente,
+        Guid? assigneeId = null,
+        DateTime? createdAtUtc = null,
+        string? id = null,
+        PrioridadeTarefa priority = PrioridadeTarefa.Media)
     {
         var task = new Tarefa(
-            Guid.NewGuid(),
-            "Task for history tests",
+            id is null ? Guid.NewGuid() : Guid.Parse(id),
+            title,
             null,
-            StatusTarefa.Pendente,
-            PrioridadeTarefa.Media,
-            DateTime.UtcNow,
+            status,
+            priority,
+            createdAtUtc ?? DateTime.UtcNow,
             null,
             creatorId,
-            null);
+            assigneeId);
         await using var context = _database.CreateContext();
         await new TarefaRepository(context).AddAsync(task);
         return task;

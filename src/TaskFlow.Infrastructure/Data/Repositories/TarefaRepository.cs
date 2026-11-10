@@ -23,6 +23,66 @@ public sealed class TarefaRepository : ITarefaRepository
     public async Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         await _context.Tarefas.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public async Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
+        int page,
+        int pageSize,
+        Guid? visibleUserId,
+        StatusTarefa? status = null,
+        PrioridadeTarefa? prioridade = null,
+        Guid? responsavelId = null,
+        bool semResponsavel = false,
+        string? titulo = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(page);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(page, 1_000_000);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, 100);
+
+        var query = _context.Tarefas.AsNoTracking().AsQueryable();
+
+        if (visibleUserId is Guid userId)
+        {
+            query = query.Where(task => task.CriadorId == userId || task.ResponsavelId == userId);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(task => task.Status == status.Value);
+        }
+
+        if (prioridade.HasValue)
+        {
+            query = query.Where(task => task.Prioridade == prioridade.Value);
+        }
+
+        if (responsavelId.HasValue)
+        {
+            query = query.Where(task => task.ResponsavelId == responsavelId.Value);
+        }
+
+        if (semResponsavel)
+        {
+            query = query.Where(task => task.ResponsavelId == null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(titulo))
+        {
+            var normalized = titulo.Trim();
+            query = query.Where(task => task.Titulo.Contains(normalized));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var tasks = await query
+            .OrderByDescending(task => task.CriadaEmUtc)
+            .ThenByDescending(task => task.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (tasks, totalCount);
+    }
+
     public async Task<IReadOnlyList<Tarefa>> ListAsync(
         int skip,
         int take,

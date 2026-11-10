@@ -7,6 +7,16 @@ public interface ITarefaRepository
 {
     Task AddAsync(Tarefa tarefa, CancellationToken cancellationToken = default);
     Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
+        int page,
+        int pageSize,
+        Guid? visibleUserId,
+        StatusTarefa? status = null,
+        PrioridadeTarefa? prioridade = null,
+        Guid? responsavelId = null,
+        bool semResponsavel = false,
+        string? titulo = null,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Tarefa>> ListAsync(
         int skip,
         int take,

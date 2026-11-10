@@ -4,11 +4,11 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 5 — consulta de histórico e fechamento da Sprint 1:** `GET /api/tasks/{id}/history` retorna eventos paginados em ordem cronológica por `DataUtc` e `Id`, sem tracking EF. Administradores podem consultar qualquer histórico; funcionário somente se for criador ou responsável atual. A rota é somente leitura. Testes demonstram o fluxo completo de criação e atribuição, detalhe, histórico e autorização sobre SQL Server isolado. A Sprint 1 (US01–US05) foi revisada e fechada antecipadamente, com critérios e evidências registrados; a demonstração manual em `TaskFlowDev` continua pendente de credenciais do mantenedor. Nenhuma migration ou alteração de schema foi necessária.
+**Dia 6 — listagem segura de tarefas:** `GET /api/tasks` oferece filtros combináveis, contagem e paginação no SQL Server. Administradores veem todas as tarefas; funcionários veem apenas as que criaram ou das quais são responsáveis. A consulta é `AsNoTracking`, ordenada por data de criação e Id decrescentes, com RowVersion em Base64. Os testes usam SQL Server isolado; a Sprint 2 permanece em andamento.
 
-Validação final: **74 aprovados, 0 reprovados e 0 ignorados**; restore concluído e build sem avisos/erros. Os resultados detalhados, incluindo testes HTTP e SQL Server reais, estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+Validação final Dia 6: restore concluído; build sem avisos/erros; **76 testes aprovados, 0 reprovados e 0 ignorados**. Categorias: Domain 25, HTTP 37, SQL Server 43 e Security 2; HTTP/SQL se sobrepõem nos testes integrados. Os resultados estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
 
-`Category=Http` (35) e `Category=SqlServer` (41) se sobrepõem nos testes HTTP integrados que usam SQL isolado; os contadores filtrados não devem ser somados. `Category=Domain` teve 25 e `Category=Security` teve 2.
+O histórico validado dos Dias 1–5 permanece documentado em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md); a validação do Dia 6 está registrada nessas mesmas páginas após a execução final.
 
 ## Tecnologias e requisitos
 
@@ -73,12 +73,13 @@ Invoke-RestMethod http://localhost:5046/api/info
 | `GET /api/users/{id}` | Somente Administrador; consulta pública ou 404 |
 | `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
 | `POST /api/tasks` | Somente Administrador; cria tarefa e histórico atomicamente; responsável funcionário opcional |
+| `GET /api/tasks` | JWT obrigatório; lista paginada, filtros `status`, `prioridade`, `responsavelId`, `semResponsavel` e `titulo`; `page` (1) / `pageSize` (20, máximo 100); administrador vê tudo, funcionário vê tarefas criadas ou atribuídas a si |
 | `GET /api/tasks/{id}` | JWT obrigatório; Administrador consulta qualquer tarefa, funcionário somente se criador ou responsável |
 | `GET /api/tasks/{id}/history` | JWT obrigatório; mesma regra de visibilidade, histórico somente leitura e paginação `page` (1) / `pageSize` (20, máximo 100) |
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada, de modo que mudança de perfil invalida privilégios antigos. A resposta de tarefa apresenta RowVersion em Base64. A listagem geral paginada, atualizações/reatribuições e endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada. Filtros da lista são combinados com AND; `semResponsavel=true` seleciona tarefas sem responsável. A resposta paginada tem `items`, `page`, `pageSize` e `totalCount`. A resposta de tarefa apresenta RowVersion em Base64. Atualizações/reatribuições e endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
 
 O histórico retorna `{ items, page, pageSize, totalCount }`; cada item contém `id`, `tarefaId`, `usuarioId`, `acao`, `dataUtc` e `descricao`. A ordenação é ascendente por data UTC e Id para desempate.
 
@@ -129,4 +130,4 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Securi
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar listagem paginada e atualizações de tarefa na Sprint 2. Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar atualização concorrente de tarefas e histórico (US07). Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.

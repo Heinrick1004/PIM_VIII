@@ -27,6 +27,8 @@ O incremento do Dia 4 também foi antecipado para 10/11: criação e atribuiçã
 
 O Dia 5 foi implementado em 10/11, também antecipadamente: consulta do histórico paginada, ordenada por data e Id e protegida pela mesma regra de vínculo da tarefa. A revisão da Sprint 1 foi registrada no backlog e no diário; US01–US05 atendem seus critérios documentados com evidência automatizada, e a demonstração manual permanece explicitamente pendente. A Sprint 1 foi fechada antes do término planejado de 13/11. Para a Sprint 2, priorizar listagem geral/filtros e atualização com RowVersion/histórico; reavaliar o escopo de web e programação SQL conforme capacidade.
 
+O Dia 6 foi implementado em 10/11: `GET /api/tasks` filtra e pagina no SQL Server com escopo de administrador/funcionário aplicado antes das demais operações da query. Foram adicionados filtros combináveis, ordenação determinística e testes HTTP/SQL Server em banco isolado. US06 foi concluída; a Sprint 2 segue aberta para atualização concorrente, clientes e demais entregas.
+
 ## Dependências e riscos de prazo
 
 - O Dia 2 depende de acesso a uma instância real de SQL Server. Não substituir persistência por respostas estáticas para apresentar conclusão.

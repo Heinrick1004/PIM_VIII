@@ -31,6 +31,8 @@ O Dia 6 foi implementado em 10/11: `GET /api/tasks` filtra e pagina no SQL Serve
 
 O Dia 7 foi concluído em 11/11: atualização de status com autorização por responsável atual, edição administrativa parcial, reatribuição/remoção, RowVersion aplicado como token concorrente efetivo do EF e histórico transacional. Testes HTTP com SQL Server real isolado comprovaram 409 sob corrida de dois DbContexts, preservação da gravação vencedora, rollback de histórico, permissões e visibilidade após reatribuição. US07 foi concluída; a Sprint 2 continua em andamento para US08–US09. `TaskFlowDev` não foi acessado, e a demonstração manual permanece pendente.
 
+O incremento do Dia 8 foi implementado: aplicação ASP.NET Core MVC com login/logout por cookie protegido, painel, tarefas, detalhe/histórico, alteração de status e gestão de usuários; API consumida por `HttpClient` tipado. Os 23 testes Web e a suíte completa (113 aprovados, 0 reprovados/ignorados) passaram. Oito rotas autenticadas foram inspecionadas em cinco larguras (360–1366 px) com API temporária de pré-visualização, sem overflow horizontal. US08 e a Sprint 2 permanecem abertas até a demonstração com conta real, ainda pendente; `TaskFlowDev` não foi usado.
+
 ## Dependências e riscos de prazo
 
 - O Dia 2 depende de acesso a uma instância real de SQL Server. Não substituir persistência por respostas estáticas para apresentar conclusão.

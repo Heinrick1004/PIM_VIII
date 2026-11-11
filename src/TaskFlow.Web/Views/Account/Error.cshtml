@@ -1,0 +1,10 @@
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Erro";
+}
+<div class="empty-state">
+    <span class="empty-icon" aria-hidden="true">!</span>
+    <h1>Não foi possível carregar a página</h1>
+    <p>Ocorreu um erro inesperado. Tente novamente ou volte para a tela inicial.</p>
+    <a class="button button-primary" asp-controller="Account" asp-action="Login">Voltar ao login</a>
+</div>

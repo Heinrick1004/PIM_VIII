@@ -10,6 +10,8 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 Validação final Dia 7: restore e build concluídos (0 avisos/erros); **90 testes aprovados, 0 reprovados e 0 ignorados**. Categorias: Domain 27, HTTP 49, SQL Server 55 e Security 2; HTTP/SQL se sobrepõem nos testes integrados. Os resultados estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
 
+**Dia 8 — interface MVC:** o projeto `TaskFlow.Web` fornece login/logout por cookie protegido, painel, listagem filtrável e paginada, criação/edição administrativa, detalhe com histórico, atualização de status e gestão de usuários. O cliente HTTP tipado consome a API; o JWT fica somente no ticket protegido do servidor, não em JavaScript ou HTML. Interface própria responsiva, com navegação móvel e mensagens explícitas para erros da API e conflitos 409. Os 23 testes Web passaram; as oito rotas principais autenticadas foram renderizadas com uma API temporária de pré-visualização em viewports de 360, 390, 768, 1024 e 1366 px, sem overflow horizontal. A suíte completa passou (113 aprovados); autenticação/demonstração com uma conta real ainda dependem do bootstrap manual e não foram simuladas pela API de pré-visualização.
+
 O histórico validado dos Dias 1–6 permanece documentado em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md); a validação do Dia 7 está registrada nessas mesmas páginas após a execução final.
 
 ## Tecnologias e requisitos
@@ -31,7 +33,7 @@ src/
   TaskFlow.Application/      # Contratos e informações da aplicação
   TaskFlow.Domain/           # Entidades, enums e invariantes
   TaskFlow.Infrastructure/   # EF Core, migrations e repositórios SQL Server
-  TaskFlow.Web/              # Reservado
+  TaskFlow.Web/              # Interface ASP.NET Core MVC
   TaskFlow.Desktop/          # Reservado
 mobile/                     # Reservado para Flutter
 database/scripts/001_schema.sql
@@ -63,6 +65,16 @@ Invoke-RestMethod http://localhost:5046/api/info
 ```
 
 `src/TaskFlow.Api/TaskFlow.Api.http` contém as mesmas requisições. Encerre a API com `Ctrl+C`.
+
+### Executar a interface web
+
+Configure a chave JWT e, se necessário, execute o bootstrap explícito do primeiro administrador conforme [ambiente](docs/ambiente.md). Não há credenciais padrão. Com a API em execução e configurada, inicie a interface em outro terminal:
+
+```powershell
+dotnet run --project src/TaskFlow.Web --launch-profile http
+```
+
+Abra `http://localhost:5080`. A URL da API em Development está em `src/TaskFlow.Web/appsettings.Development.json` (`http://localhost:5046`). Ajuste a configuração externa para outro ambiente; em produção configure HTTPS e chaves de Data Protection persistentes. Para testar a interface: autentique-se, consulte o painel e as tarefas; administradores podem criar/editar tarefas e usuários, enquanto funcionários podem atualizar o status das tarefas atribuídas. Não use `TaskFlowDev` para testes automatizados.
 
 | Rota | Resposta implementada |
 | --- | --- |
@@ -118,6 +130,7 @@ Senhas são armazenadas com `PasswordHasher<Usuario>` do ASP.NET Core Identity (
 Para executar testes por categoria:
 
 ```powershell
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Web"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Domain"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Http"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=SqlServer"
@@ -134,4 +147,4 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Securi
 - [Diagnóstico e verificações](docs/ambiente.md)
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 
-Pendências próximas: executar manualmente o bootstrap com uma senha definida pelo mantenedor e demonstrar o fluxo no Swagger em `TaskFlowDev`; implementar atualização concorrente de tarefas e histórico (US07). Interfaces, objetos SQL, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com senha definida pelo mantenedor e demonstrar os fluxos da API e da interface em `TaskFlowDev`; concluir a validação com conta real antes de fechar US08. A interface e a suíte completa já foram validadas; `TaskFlowDev` não foi usado. US07 foi concluída e publicada; US09 (objetos SQL), clientes Flutter/desktop, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.

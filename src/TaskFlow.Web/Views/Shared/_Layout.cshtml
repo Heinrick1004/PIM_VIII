@@ -1,0 +1,64 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111827" />
+    <title>@ViewData["Title"] · TaskFlow</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="app-shell">
+    <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+    <button class="nav-scrim" type="button" aria-label="Fechar menu" data-nav-close hidden></button>
+    <aside class="sidebar" id="primary-navigation" aria-label="Navegação principal">
+        <a class="brand" asp-controller="Home" asp-action="Index" aria-label="TaskFlow, painel">
+            <span class="brand-mark" aria-hidden="true">T</span>
+            <span>task<span>flow</span><small>ALUNOS TECH</small></span>
+        </a>
+        <nav class="side-nav">
+            <p class="nav-caption">ESPAÇO DE TRABALHO</p>
+            <a class="nav-link" asp-controller="Home" asp-action="Index"><span aria-hidden="true">▦</span> Painel</a>
+            <a class="nav-link" asp-controller="Tasks" asp-action="Index"><span aria-hidden="true">☷</span> Tarefas</a>
+            @if (User.IsInRole(nameof(PerfilUsuario.Administrador)))
+            {
+                <p class="nav-caption nav-caption-spaced">ADMINISTRAÇÃO</p>
+                <a class="nav-link" asp-controller="Users" asp-action="Index"><span aria-hidden="true">♙</span> Usuários</a>
+            }
+        </nav>
+        <div class="sidebar-bottom">
+            <div class="user-summary">
+                <span class="avatar" aria-hidden="true">@((User.Identity?.Name?.FirstOrDefault() ?? 'U').ToString().ToUpperInvariant())</span>
+                <span class="user-summary-copy"><strong>@User.Identity?.Name</strong><small>@User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</small></span>
+            </div>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                <button class="nav-link signout" type="submit"><span aria-hidden="true">↪</span> Sair</button>
+            </form>
+        </div>
+    </aside>
+    <div class="page-area">
+        <header class="topbar">
+            <button type="button" class="menu-toggle" aria-controls="primary-navigation" aria-expanded="false" aria-label="Abrir menu" data-nav-toggle>☰</button>
+            <span class="topbar-label">Alunos Tech <span aria-hidden="true">/</span> Workspace</span>
+            <span class="topbar-profile">@User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
+        </header>
+        <main class="main-content" id="main-content" tabindex="-1">
+            @if (TempData["Notice"] is string notice)
+            {
+                <div class="alert alert-info" role="status">@notice</div>
+            }
+            @if (TempData["Success"] is string success)
+            {
+                <div class="alert alert-success" role="status">@success</div>
+            }
+            @if (TempData["Error"] is string error)
+            {
+                <div class="alert alert-error" role="alert">@error</div>
+            }
+            @RenderBody()
+        </main>
+        <footer class="footer">TaskFlow <span>·</span> Alunos Tech</footer>
+    </div>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

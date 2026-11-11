@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111827" />
+    <title>@ViewData["Title"] · TaskFlow</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="auth-page">
+    <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+    <main id="main-content" class="auth-card" tabindex="-1">
+        @if (TempData["Notice"] is string notice)
+        {
+            <div class="alert alert-info" role="status">@notice</div>
+        }
+        @RenderBody()
+    </main>
+    <script src="~/js/login.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -249,4 +249,28 @@ HTTP e SQL Server se sobrepõem nos testes integrados; os totais por categoria n
 
 ### Sprint 2
 
-US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aberta: web responsiva (US08) e objetos SQL planejados (US09) continuam pendentes de implementação e validação.
+US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aberta: interface web (US08) implementada no Dia 8, mas ainda em validação; objetos SQL (US09) continuam pendentes.
+
+## Dia 8 — 16/11/2026: interface ASP.NET Core MVC
+
+### Implementação
+
+- Criado `TaskFlow.Web`, projeto MVC .NET 10 da solução, conectado à API por cliente `HttpClient` tipado e configuração de URL por ambiente; a API e seu schema não foram alterados.
+- Implementados login/logout e sessão por cookie HttpOnly com ticket protegido por Data Protection e expiração limitada ao JWT da API. O token não é gravado em localStorage, JavaScript ou HTML. POSTs aplicam antiforgery; cookie é Secure em produção.
+- Implementados painel com indicadores/tarefas recentes, lista com filtros e paginação, criação/edição administrativa, detalhe com histórico, atualização de status e administração paginada de usuários.
+- Erros de rede/API e conflitos 409 são apresentados sem sucesso simulado. Funcionários não recebem ações administrativas; a autorização definitiva continua na API, que revalida o perfil no banco.
+- Criada interface CSS própria e responsiva, com navegação móvel, estados vazios, mensagens acessíveis e indicação de processamento no login. Removidos assets Bootstrap/jQuery não utilizados gerados pelo scaffold.
+- Adicionados testes MVC e de cliente HTTP para fluxos e contratos Web. `TaskFlow.Web` usa API de teste controlada nos testes; isso não substitui uma demonstração com conta real.
+
+### Evidências e pendências
+
+| Verificação | Resultado |
+| --- | --- |
+| Baseline pré-Dia 8 | Suíte completa: 90 aprovados, 0 reprovados e 0 ignorados (resultado final do Dia 7). |
+| Testes Web | `Category=Web`: 23 aprovados, 0 reprovados e 0 ignorados, incluindo o teste de bloqueio a URL HTTP da API fora de Development. |
+| Inspeção no navegador | Oito rotas principais renderizadas com uma API temporária de pré-visualização, em 360, 390, 768, 1024 e 1366 px; todas retornaram 200 e sem overflow horizontal. A medição inicial revelou overflow da lista em 768 px; o breakpoint móvel mudou de 760 para 820 px e as 40 combinações foram repetidas com sucesso. |
+| Restore / build / suíte completa | `dotnet restore TaskFlow.sln`: sucesso. `dotnet build TaskFlow.sln --no-restore`: 0 avisos e 0 erros. `dotnet test TaskFlow.sln --no-build`: **113 aprovados, 0 reprovados, 0 ignorados**. |
+| Testes filtrados | Web 23, Domain 27, HTTP 49, SQL Server 55 e Security 2 aprovados; 0 falhas/ignorados em cada filtro. HTTP e SQL Server se sobrepõem. |
+| `TaskFlowDev`, migrations e credenciais | Banco não acessado ou alterado; nenhuma migration criada/aplicada; nenhum usuário ou credencial padrão criado. Bootstrap e demonstração manual permanecem pendentes. |
+
+US08 permanece em andamento até a demonstração manual com conta configurada pelo mantenedor. O preview de interface utilizou API simulada local e não representa login real ou dados de `TaskFlowDev`. A Sprint 2 continua aberta; Dia 8 não altera a pendência de US09 (objetos SQL).

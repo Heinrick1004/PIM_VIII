@@ -13,20 +13,31 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US05 | Como administrador, quero cadastrar e atribuir tarefas para organizar as demandas internas. | P1 / 5 | RF03, RF05, RF06 | Criação inicia Pendente; título, prioridade e usuários validados; prazo opcional em UTC; autor vem da identidade; criação e histórico confirmados na mesma transação. | S1 |
 | US06 | Como funcionário, quero consultar minhas tarefas para acompanhar prioridades e prazos. | P1 / 3 | RF04, RNF02 | Listagem paginada com filtros combináveis de status, prioridade, responsável, título e sem responsável; funcionário vê apenas tarefas em que é criador ou responsável; administrador vê todas; filtros, contagem e paginação no SQL; ordenação estável. | S2 |
 | US07 | Como responsável, quero atualizar o status da minha tarefa, e como administrador quero editar seus campos administrativos, com histórico e proteção contra sobrescrita. | P1 / 5 | RF05, RF06, RNF03, RNF04 | `PATCH` só permite status ao responsável atual ou administrador; `PUT` administrativo permite título, descrição, prioridade, prazo e reatribuição (inclusive remoção); toda escrita requer RowVersion; conflito real gera 409; histórico de mudanças efetivas é atômico, sem evento duplicado; criador e data de criação são imutáveis. | S2 |
-| US08 | Como usuário, quero consultar tarefas em uma interface web responsiva. | P1 / 5 | RF07, RNF05 | Login, lista/detalhe e mudança de status integrados à API; usabilidade em 360 px e desktop; rótulos e teclado; erros reais apresentados ao usuário. | S2 |
+| US08 | Como usuário, quero consultar tarefas em uma interface web responsiva. | P1 / 5 | RF07, RNF05 | Login/logout por cookie protegido; painel, lista/filtros/paginação, detalhe/histórico e status integrados à API; formulários administrativos de tarefa e usuário; experiência responsiva desde 360 px; rótulos, antiforgery e erros/409 apresentados sem sucesso simulado. | S2 |
 | US09 | Como avaliador, quero evidências de programação de banco para verificar procedures, functions, triggers e transações. | P2 / 5 | RF04, RF06, RNF03 | Implementar objetos SQL com finalidade definida, parâmetros e testes; procedure de consulta e function com uso demonstrado; trigger sem duplicar auditoria; cenário de commit/rollback documentado. | S2 |
 | US10 | Como funcionário, quero consultar e atualizar minhas tarefas pelo aplicativo Flutter mínimo. | P2 / 3 | RF07, RNF02 | Cliente consome a API; login, consulta e mudança de status; lida com falha de rede e autorização; não inclui acesso direto ao banco nem credenciais fixas. | S3 |
 | US11 | Como funcionário, quero acessar as tarefas por um cliente desktop C# mínimo. | P2 / 3 | RF07, RNF02 | Cliente consome a API; login, consulta e mudança de status; apresenta erros e conflitos; não duplica autorização nem acessa SQL diretamente. | S3 |
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 7
+## Estado executado até o Dia 8
 
 - **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
 - **US06 concluída no Dia 6:** lista protegida com visibilidade por criador/responsável, filtros AND, contagem/paginação SQL, ordenação estável e testes HTTP/SQL Server isolados.
 - **US07 concluída no Dia 7:** alteração de status por administrador/responsável atual, edição administrativa parcial, reatribuição e remoção, RowVersion aplicado como token original EF e validado sob corrida real no SQL Server, eventos transacionais e rollback em falha de histórico.
-- **Parciais ou planejadas:** US08–US13 e as demais integrações continuam pendentes.
+- **US08 em andamento no Dia 8:** interface MVC implementada com autenticação por cookie, painel, tarefas, histórico e usuários, consumindo a API por cliente HTTP tipado. Os 23 testes Web e a suíte completa (113 testes) passaram; oito rotas foram inspecionadas visualmente em cinco larguras (360–1366 px), sem overflow horizontal. Resta a demonstração com conta real; a API de pré-visualização não usou `TaskFlowDev`.
+- **Parciais ou planejadas:** US09–US13 e as demais integrações continuam pendentes.
+
+### Revisão provisória da US08 — Dia 8
+
+| Critério | Evidência verificada / pendência |
+| --- | --- |
+| Autenticação sem expor JWT ao navegador | Login/logout usam cookie protegido por Data Protection e antiforgery; testes Web verificam fluxo e ausência do token no HTML. Login com conta real da API ainda depende do bootstrap manual. |
+| Painel, tarefas, detalhe/histórico, status e administração | Controllers e views MVC consomem os endpoints da API via cliente HTTP tipado; testes Web usam API de teste controlada e testes do cliente verificam requisições, Bearer, payloads, RowVersion e erros. |
+| Permissões, conflito e erro real | A interface não permite ações administrativas a funcionários, apresenta falhas da API e trata 409 sem declarar sucesso; testes Web cobrem esses casos. Permissões definitivas continuam no servidor API. |
+| Responsividade e inspeção visual | As oito rotas principais foram conferidas em navegador nos viewports 360, 390, 768, 1024 e 1366 px com API de pré-visualização; nenhuma apresentou overflow horizontal. Um problema inicial em 768 px foi corrigido ampliando o breakpoint móvel. |
+| Conclusão da história | **Em andamento.** Suite completa (113 aprovados) passou; resta demonstração manual com conta configurada pelo mantenedor. API de pré-visualização não usa `TaskFlowDev` nem comprova autenticação real. |
 
 ### Revisão da US06 — Dia 6
 
@@ -67,7 +78,7 @@ Fechamento antecipado em relação à janela planejada (09–13/11), a pedido da
 - **Funcionou:** manter o SQL Server real como critério de persistência; os fixtures temporários isolados permitiram exercitar middleware, FKs, transação e autorização sem escrever em `TaskFlowDev`. Repositórios e unidade de trabalho existentes foram reutilizados sem introduzir outra camada.
 - **Dificuldades:** o mapeamento inicial de RowVersion e salvamentos individuais por repositório exigiram correções na etapa de persistência; a validação integrada real ajudou a detectar essas falhas. A demonstração manual continua bloqueada pela ausência de credenciais escolhidas pelo mantenedor.
 - **Decisões mantidas:** migrations são a única evolução oficial do schema; histórico é gravado pela aplicação na transação, sem trigger duplicador; testes de escrita usam banco SQL Server efêmero; nenhum bootstrap automático.
-- **Ação para Sprint 2:** priorizar listagem paginada/filtros e atualizações com RowVersion e histórico. A consulta de detalhe e o histórico paginado já foram antecipados; revisar capacidade antes de iniciar interfaces e objetos SQL planejados.
+- **Ação para Sprint 2:** manter US08 em andamento até a demonstração operacional com conta real; selecionar/planejar US09 (objetos SQL) conforme capacidade. US06 e US07 foram concluídas; a Sprint 2 permanece aberta.
 
 ## Plano das três sprints
 

@@ -1,0 +1,10 @@
+@model string
+@{
+    ViewData["Title"] = "Serviço indisponível";
+}
+<section class="panel api-error">
+    <span class="empty-icon" aria-hidden="true">!</span>
+    <h1>Não foi possível concluir</h1>
+    <p>@Model</p>
+    <a class="button button-primary" asp-action="Index">Voltar para tarefas</a>
+</section>

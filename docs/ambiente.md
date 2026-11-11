@@ -1,4 +1,28 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 7
+# Diagnóstico do ambiente e validação — Dias 1 a 8
+
+## Situação da implementação Web — Dia 8
+
+| Verificação | Resultado |
+| --- | --- |
+| Projeto e integração | `TaskFlow.Web` é um projeto ASP.NET Core MVC .NET 10 incluído na solução. Consome a API existente por `HttpClient` tipado; nenhum endpoint, migration ou modelo SQL da API foi alterado nesta etapa. |
+| Funcionalidades | Login/logout por cookie protegido, painel, tarefas com filtros/paginação, criação/edição administrativa, detalhe/histórico, alteração de status e administração de usuários. |
+| Proteção da sessão | JWT permanece no ticket protegido pelo Data Protection no servidor; navegador recebe cookie `HttpOnly`. Formulários POST usam antiforgery; cookie `Secure` em produção. Nenhuma credencial padrão adicionada. |
+| Testes específicos | Categoria `Web`: **23 aprovados, 0 reprovados, 0 ignorados**, incluindo MVC com API controlada e cliente HTTP com handlers; valida payloads, Bearer, autorização, formulários, conflito 409, falhas HTTP, ausência do JWT no HTML e exigência de HTTPS da API fora de Development. |
+| Inspeção visual | Oito rotas principais (painel, lista de tarefas, criação/edição de tarefa, detalhe/histórico, lista e criação/edição de usuário) renderizadas com API temporária de pré-visualização em 360, 390, 768, 1024 e 1366 px; sem overflow horizontal. Um overflow da lista em 768 px foi corrigido ajustando o breakpoint móvel de 760 para 820 px e as 40 combinações de rota/viewport foram repetidas com sucesso. |
+| Banco e demonstração | `TaskFlowDev` não foi acessado, alterado, recriado nem migrado. Bootstrap, login real e demonstração da Web continuam pendentes de credenciais escolhidas pelo mantenedor. |
+| Validação final | `dotnet restore TaskFlow.sln` e `dotnet build TaskFlow.sln --no-restore`: sucesso, 0 avisos e 0 erros. `dotnet test TaskFlow.sln --no-build`: **113 aprovados, 0 reprovados, 0 ignorados** (23 a mais que a baseline de 90). |
+
+US08 permanece em andamento até a demonstração manual com conta real. O preview visual usa mock temporário da API e dados fictícios `example.test`; não prova autenticação persistida nem substitui testes HTTP/SQL da API. Resultados por categoria:
+
+| Categoria | Aprovados | Reprovados | Ignorados |
+| --- | ---: | ---: | ---: |
+| Web | 23 | 0 | 0 |
+| Domain | 27 | 0 | 0 |
+| HTTP | 49 | 0 | 0 |
+| SQL Server | 55 | 0 | 0 |
+| Security | 2 | 0 | 0 |
+
+As categorias HTTP/SQL Server se sobrepõem nos testes integrados; não somar esses contadores. Testes SQL usaram bancos temporários `TaskFlowIntegrationTests_<GUID>`. `TaskFlowDev` permaneceu intocado.
 
 ## Situação verificada no Dia 7 — 11/11/2026
 

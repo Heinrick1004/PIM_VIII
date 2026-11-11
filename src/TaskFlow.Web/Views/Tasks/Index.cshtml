@@ -1,0 +1,107 @@
+@model TaskListViewModel
+@{
+    ViewData["Title"] = "Tarefas";
+    var results = Model.Results;
+    var totalPages = results is null ? 0 : (int)Math.Ceiling(results.TotalCount / (double)results.PageSize);
+}
+<div class="page-heading heading-row">
+    <div><p class="eyebrow">ACOMPANHAMENTO</p><h1>Tarefas</h1><p class="page-subtitle">Consulte e acompanhe as tarefas disponíveis para seu perfil.</p></div>
+    @if (Model.IsAdministrator)
+    {
+        <a class="button button-primary" asp-action="Create"><span aria-hidden="true">＋</span> Nova tarefa</a>
+    }
+</div>
+@if (Model.Error is not null)
+{
+    <div class="alert alert-error" role="alert"><span>@Model.Error</span><a asp-action="Index">Tentar novamente</a></div>
+}
+<section class="panel filter-panel" aria-label="Filtros de tarefas">
+    <form method="get" asp-action="Index" class="filter-grid">
+        <div class="field filter-search">
+            <label for="titulo">Buscar tarefa</label>
+            <input id="titulo" name="titulo" value="@Model.Title" maxlength="200" placeholder="Digite um título" />
+        </div>
+        <div class="field">
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">Todos</option>
+                <option value="1" selected="@(Model.Status == StatusTarefa.Pendente)">Pendente</option>
+                <option value="2" selected="@(Model.Status == StatusTarefa.EmAndamento)">Em andamento</option>
+                <option value="3" selected="@(Model.Status == StatusTarefa.Concluida)">Concluída</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="prioridade">Prioridade</label>
+            <select id="prioridade" name="prioridade">
+                <option value="">Todas</option>
+                <option value="1" selected="@(Model.Priority == PrioridadeTarefa.Baixa)">Baixa</option>
+                <option value="2" selected="@(Model.Priority == PrioridadeTarefa.Media)">Média</option>
+                <option value="3" selected="@(Model.Priority == PrioridadeTarefa.Alta)">Alta</option>
+            </select>
+        </div>
+        @if (Model.IsAdministrator)
+        {
+            <div class="field filter-assignee">
+                <label for="responsavelId">ID do responsável</label>
+                <input id="responsavelId" name="responsavelId" value="@Model.ResponsibleId" inputmode="text" placeholder="GUID do usuário" />
+            </div>
+            <label class="checkbox-field"><input type="checkbox" name="semResponsavel" value="true" checked="@Model.WithoutResponsible" /> Sem responsável</label>
+        }
+        <input type="hidden" name="pageSize" value="@Model.PageSize" />
+        <div class="filter-actions"><button class="button button-primary" type="submit">Filtrar</button><a class="button button-quiet" asp-action="Index">Limpar</a></div>
+    </form>
+</section>
+<section class="panel list-panel">
+    <div class="panel-heading">
+        <div><h2>Lista de tarefas</h2><p>@(results is null ? "Os dados não puderam ser carregados." : $"{results.TotalCount} tarefa(s) encontradas")</p></div>
+    </div>
+    @if (results is null)
+    {
+        <div class="empty-inline"><strong>Não foi possível carregar as tarefas</strong><span>Verifique se a API está disponível e tente novamente.</span></div>
+    }
+    else if (results.Items.Count == 0)
+    {
+        <div class="empty-inline"><span class="empty-icon" aria-hidden="true">⌕</span><strong>Nenhuma tarefa encontrada</strong><span>Altere os filtros ou tente uma nova busca.</span></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Tarefa</th><th>Status</th><th>Prioridade</th><th>Responsável</th><th>Prazo</th><th><span class="sr-only">Ação</span></th></tr></thead>
+                <tbody>
+                @foreach (var task in results.Items)
+                {
+                    <tr>
+                        <td data-label="Tarefa"><a class="task-title-link" asp-action="Details" asp-route-id="@task.Id">@task.Titulo</a><small class="mobile-task-meta">Criada em @task.CriadaEmUtc.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
+                        <td data-label="Status"><span class="status-badge status-@task.Status.ToString().ToLowerInvariant()">@EnumLabels.Status(task.Status)</span></td>
+                        <td data-label="Prioridade"><span class="priority-label priority-@task.Prioridade.ToString().ToLowerInvariant()">@EnumLabels.Priority(task.Prioridade)</span></td>
+                        <td>@(task.ResponsavelId.HasValue
+                            ? (Model.UserNames.TryGetValue(task.ResponsavelId.Value, out var responsibleName)
+                                ? responsibleName
+                                : (task.ResponsavelId == Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value) ? "Você" : "Funcionário responsável"))
+                            : "Sem responsável")</td>
+                        <td data-label="Prazo">@(task.PrazoUtc.HasValue ? task.PrazoUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "—")</td>
+                        <td><a class="icon-link" asp-action="Details" asp-route-id="@task.Id" aria-label="Abrir @task.Titulo">→</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (results is not null && totalPages > 1)
+    {
+        <nav class="pagination" aria-label="Paginação das tarefas">
+            <span>Página @results.Page de @totalPages</span>
+            <div class="pagination-actions">
+                @if (results.Page > 1)
+                {
+                    <a class="button button-secondary button-small" asp-action="Index" asp-route-page="@(results.Page - 1)" asp-route-pageSize="@Model.PageSize" asp-route-status="@Model.Status" asp-route-prioridade="@Model.Priority" asp-route-responsavelId="@Model.ResponsibleId" asp-route-semResponsavel="@Model.WithoutResponsible" asp-route-titulo="@Model.Title">Anterior</a>
+                }
+                @if (results.Page < totalPages)
+                {
+                    <a class="button button-secondary button-small" asp-action="Index" asp-route-page="@(results.Page + 1)" asp-route-pageSize="@Model.PageSize" asp-route-status="@Model.Status" asp-route-prioridade="@Model.Priority" asp-route-responsavelId="@Model.ResponsibleId" asp-route-semResponsavel="@Model.WithoutResponsible" asp-route-titulo="@Model.Title">Próxima</a>
+                }
+            </div>
+        </nav>
+    }
+</section>

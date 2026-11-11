@@ -1,0 +1,43 @@
+@model UserFormViewModel
+@{
+    var editing = Model.Id.HasValue;
+    ViewData["Title"] = editing ? "Editar usuário" : "Novo usuário";
+}
+<div class="breadcrumbs"><a asp-action="Index">Usuários</a><span aria-hidden="true">/</span><span>@(editing ? "Editar" : "Novo")</span></div>
+<div class="page-heading"><p class="eyebrow">ADMINISTRAÇÃO</p><h1>@(editing ? "Editar usuário" : "Cadastrar usuário")</h1><p class="page-subtitle">@(editing ? "Atualize nome, e-mail ou perfil. A senha atual não será exibida." : "Crie um acesso para um funcionário ou administrador.")</p></div>
+<section class="panel form-panel">
+    <form asp-controller="Users" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack">
+        <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+        <div class="field">
+            <label asp-for="Name">Nome <span class="required-mark">*</span></label>
+            <input asp-for="Name" autocomplete="name" maxlength="150" />
+            <span asp-validation-for="Name" class="field-error"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Email">E-mail <span class="required-mark">*</span></label>
+            <input asp-for="Email" type="email" autocomplete="email" maxlength="254" />
+            <span asp-validation-for="Email" class="field-error"></span>
+        </div>
+        @if (!editing)
+        {
+            <div class="field">
+                <label asp-for="Password">Senha inicial <span class="required-mark">*</span></label>
+                <input asp-for="Password" autocomplete="new-password" />
+                <span class="field-hint">Use de 12 a 128 caracteres conforme as regras da API.</span>
+                <span asp-validation-for="Password" class="field-error"></span>
+            </div>
+        }
+        <div class="field">
+            <label asp-for="Profile">Perfil</label>
+            <select asp-for="Profile">
+                <option value="2">Funcionário</option>
+                <option value="1">Administrador</option>
+            </select>
+            <span asp-validation-for="Profile" class="field-error"></span>
+        </div>
+        <div class="form-actions">
+            <a class="button button-quiet" asp-action="Index">Cancelar</a>
+            <button class="button button-primary" type="submit">@(editing ? "Salvar usuário" : "Cadastrar usuário")</button>
+        </div>
+    </form>
+</section>

@@ -1,0 +1,60 @@
+@model UserListViewModel
+@{
+    ViewData["Title"] = "Usuários";
+    var results = Model.Results;
+    var totalPages = results is null ? 0 : (int)Math.Ceiling(results.TotalCount / (double)results.PageSize);
+}
+<div class="page-heading heading-row">
+    <div><p class="eyebrow">ADMINISTRAÇÃO</p><h1>Usuários</h1><p class="page-subtitle">Gerencie os acessos e perfis da equipe.</p></div>
+    <a class="button button-primary" asp-action="Create"><span aria-hidden="true">＋</span> Novo usuário</a>
+</div>
+@if (Model.Error is not null)
+{
+    <div class="alert alert-error" role="alert"><span>@Model.Error</span><a asp-action="Index">Tentar novamente</a></div>
+}
+<section class="panel list-panel">
+    <div class="panel-heading"><div><h2>Equipe</h2><p>@(results is null ? "Os dados não puderam ser carregados." : $"{results.TotalCount} usuário(s) cadastrados")</p></div></div>
+    @if (results is null)
+    {
+        <div class="empty-inline"><strong>Não foi possível carregar os usuários</strong><span>Verifique se a API está disponível e tente novamente.</span></div>
+    }
+    else if (results.Items.Count == 0)
+    {
+        <div class="empty-inline"><strong>Nenhum usuário cadastrado</strong><span>Cadastre funcionários para atribuir tarefas.</span></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th><span class="sr-only">Ação</span></th></tr></thead>
+                <tbody>
+                @foreach (var user in results.Items)
+                {
+                    <tr>
+                        <td data-label="Nome"><span class="table-user"><span class="avatar avatar-light" aria-hidden="true">@user.Nome.FirstOrDefault().ToString().ToUpperInvariant()</span><strong>@user.Nome</strong></span></td>
+                        <td data-label="E-mail">@user.Email</td>
+                        <td data-label="Perfil"><span class="role-badge">@EnumLabels.Profile(user.Perfil)</span></td>
+                        <td data-label="Ação"><a class="button button-quiet button-small" asp-action="Edit" asp-route-id="@user.Id">Editar</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (results is not null && totalPages > 1)
+    {
+        <nav class="pagination" aria-label="Paginação dos usuários">
+            <span>Página @results.Page de @totalPages</span>
+            <div class="pagination-actions">
+                @if (results.Page > 1)
+                {
+                    <a class="button button-secondary button-small" asp-action="Index" asp-route-page="@(results.Page - 1)">Anterior</a>
+                }
+                @if (results.Page < totalPages)
+                {
+                    <a class="button button-secondary button-small" asp-action="Index" asp-route-page="@(results.Page + 1)">Próxima</a>
+                }
+            </div>
+        </nav>
+    }
+</section>

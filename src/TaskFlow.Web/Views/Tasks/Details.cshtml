@@ -1,0 +1,107 @@
+@model TaskDetailsViewModel
+@{
+    ViewData["Title"] = "Detalhes da tarefa";
+    var task = Model.Task;
+}
+<div class="breadcrumbs"><a asp-action="Index">Tarefas</a><span aria-hidden="true">/</span><span>Detalhes</span></div>
+<div class="page-heading heading-row details-heading">
+    <div><p class="eyebrow">DETALHES DA TAREFA</p><h1>@task.Titulo</h1><p class="page-subtitle">Criada em @task.CriadaEmUtc.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm")</p></div>
+    <div class="heading-actions">
+        @if (Model.IsAdministrator)
+        {
+            <a class="button button-secondary" asp-action="Edit" asp-route-id="@task.Id">Editar tarefa</a>
+        }
+        <a class="button button-quiet" asp-action="Index">Voltar</a>
+    </div>
+</div>
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success" role="status">@success</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-error" role="alert">@error <a asp-action="Details" asp-route-id="@task.Id">Recarregar</a></div>
+}
+@if (Model.Error is not null)
+{
+    <div class="alert alert-error" role="alert">@Model.Error</div>
+}
+<section class="detail-grid">
+    <article class="panel task-summary">
+        <div class="detail-status-row">
+            <span class="status-badge status-@task.Status.ToString().ToLowerInvariant()">@EnumLabels.Status(task.Status)</span>
+            <span class="priority-label priority-@task.Prioridade.ToString().ToLowerInvariant()">@EnumLabels.Priority(task.Prioridade)</span>
+        </div>
+        <h2>Descrição</h2>
+        <p class="task-description">@(string.IsNullOrWhiteSpace(task.Descricao) ? "Nenhuma descrição informada." : task.Descricao)</p>
+        <dl class="detail-facts">
+            <div><dt>Criador</dt><dd>@(Model.UserNames.TryGetValue(task.CriadorId, out var creatorName) ? creatorName : task.CriadorId.ToString())</dd></div>
+            <div><dt>Responsável</dt><dd>@(task.ResponsavelId.HasValue
+                ? (Model.UserNames.TryGetValue(task.ResponsavelId.Value, out var responsibleName) ? responsibleName : task.ResponsavelId.Value.ToString())
+                : "Sem responsável")</dd></div>
+            <div><dt>Prazo</dt><dd>@(task.PrazoUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Sem prazo")</dd></div>
+            <div><dt>Identificador</dt><dd class="id-value">@task.Id</dd></div>
+        </dl>
+        @if (Model.CanChangeStatus)
+        {
+            <div class="status-update">
+                <h2>Atualizar status</h2>
+                <form asp-action="ChangeStatus" asp-route-id="@task.Id" method="post" class="inline-form">
+                    <input type="hidden" name="rowVersion" value="@task.RowVersion" />
+                    <label class="sr-only" for="status-change">Novo status</label>
+                    <select id="status-change" name="status">
+                        <option value="1" selected="@(task.Status == StatusTarefa.Pendente)">Pendente</option>
+                        <option value="2" selected="@(task.Status == StatusTarefa.EmAndamento)">Em andamento</option>
+                        <option value="3" selected="@(task.Status == StatusTarefa.Concluida)">Concluída</option>
+                    </select>
+                    <button class="button button-primary" type="submit">Salvar status</button>
+                </form>
+            </div>
+        }
+    </article>
+    <article class="panel history-panel">
+        <div class="panel-heading"><div><h2>Histórico</h2><p>Eventos em ordem cronológica, do mais antigo ao mais recente.</p></div></div>
+        @if (Model.History is null)
+        {
+            <div class="empty-inline"><strong>Histórico indisponível</strong><span>Tente novamente em alguns instantes.</span></div>
+        }
+        else if (Model.History.Items.Count == 0)
+        {
+            <div class="empty-inline"><strong>Nenhum evento registrado</strong><span>As alterações futuras aparecerão aqui.</span></div>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var item in Model.History.Items)
+                {
+                    <li>
+                        <span class="timeline-dot" aria-hidden="true"></span>
+                        <div class="timeline-entry">
+                            <strong>@item.Acao</strong>
+                            <time datetime="@item.DataUtc.ToString("O")">@item.DataUtc.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm")</time>
+                            <p>@(item.Descricao ?? "Alteração registrada.")</p>
+                            <small>Autor: @(Model.UserNames.TryGetValue(item.UsuarioId, out var authorName) ? authorName : item.UsuarioId.ToString())</small>
+                        </div>
+                    </li>
+                }
+            </ol>
+            @if (Model.History.TotalCount > Model.History.PageSize)
+            {
+                var pages = (int)Math.Ceiling(Model.History.TotalCount / (double)Model.History.PageSize);
+                <nav class="pagination" aria-label="Paginação do histórico">
+                    <span>Página @Model.History.Page de @pages</span>
+                    <div class="pagination-actions">
+                        @if (Model.History.Page > 1)
+                        {
+                            <a class="button button-secondary button-small" asp-action="Details" asp-route-id="@task.Id" asp-route-page="@(Model.History.Page - 1)">Anterior</a>
+                        }
+                        @if (Model.History.Page < pages)
+                        {
+                            <a class="button button-secondary button-small" asp-action="Details" asp-route-id="@task.Id" asp-route-page="@(Model.History.Page + 1)">Próxima</a>
+                        }
+                    </div>
+                </nav>
+            }
+        }
+    </article>
+</section>

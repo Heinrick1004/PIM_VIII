@@ -1,0 +1,64 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Painel";
+}
+<div class="page-heading heading-row">
+    <div>
+        <p class="eyebrow">VISÃO GERAL</p>
+        <h1>Olá, @Model.Name</h1>
+        <p class="page-subtitle">Acompanhe o ritmo das tarefas da sua equipe.</p>
+    </div>
+    <div class="heading-actions">
+        @if (User.IsInRole(nameof(PerfilUsuario.Administrador)))
+        {
+            <a class="button button-primary" asp-controller="Tasks" asp-action="Create"><span aria-hidden="true">＋</span> Nova tarefa</a>
+        }
+        <a class="button button-secondary" asp-controller="Tasks" asp-action="Index">Ver tarefas</a>
+    </div>
+</div>
+@if (Model.Error is not null)
+{
+    <div class="alert alert-error" role="alert">
+        <span>@Model.Error</span>
+        <a asp-controller="Home" asp-action="Index">Tentar novamente</a>
+    </div>
+}
+else
+{
+    <section class="metric-grid" aria-label="Resumo das tarefas">
+        <article class="metric-card metric-total"><span class="metric-label">Tarefas visíveis</span><strong>@Model.Total</strong><span class="metric-note">no seu espaço</span></article>
+        <article class="metric-card"><span class="metric-label">Pendentes</span><strong>@Model.Pending</strong><span class="metric-indicator indicator-pending">Aguardando início</span></article>
+        <article class="metric-card"><span class="metric-label">Em andamento</span><strong>@Model.InProgress</strong><span class="metric-indicator indicator-active">Em execução</span></article>
+        <article class="metric-card"><span class="metric-label">Concluídas</span><strong>@Model.Completed</strong><span class="metric-indicator indicator-done">Finalizadas</span></article>
+    </section>
+    <section class="panel recent-panel">
+        <div class="panel-heading">
+            <div><h2>Tarefas recentes</h2><p>Atualizações mais recentes disponíveis para seu perfil.</p></div>
+            <a class="text-link" asp-controller="Tasks" asp-action="Index">Ver todas <span aria-hidden="true">→</span></a>
+        </div>
+        @if (Model.RecentTasks.Count == 0)
+        {
+            <div class="empty-inline"><span class="empty-icon" aria-hidden="true">☷</span><strong>Nenhuma tarefa por aqui</strong><span>As tarefas visíveis para você aparecerão nesta lista.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Tarefa</th><th>Status</th><th>Prioridade</th><th>Prazo</th><th><span class="sr-only">Ação</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var task in Model.RecentTasks)
+                    {
+                        <tr>
+                            <td data-label="Tarefa"><a class="task-title-link" asp-controller="Tasks" asp-action="Details" asp-route-id="@task.Id">@task.Titulo</a></td>
+                            <td data-label="Status"><span class="status-badge status-@task.Status.ToString().ToLowerInvariant()">@EnumLabels.Status(task.Status)</span></td>
+                            <td data-label="Prioridade">@EnumLabels.Priority(task.Prioridade)</td>
+                            <td data-label="Prazo">@(task.PrazoUtc.HasValue ? task.PrazoUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "—")</td>
+                            <td data-label="Ação"><a class="icon-link" asp-controller="Tasks" asp-action="Details" asp-route-id="@task.Id" aria-label="Detalhes de @task.Titulo">→</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}

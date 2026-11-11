@@ -1,0 +1,10 @@
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Acesso não permitido";
+}
+<div class="empty-state">
+    <span class="empty-icon" aria-hidden="true">!</span>
+    <h1>Acesso não permitido</h1>
+    <p>Seu perfil não tem autorização para abrir esta página.</p>
+    <a class="button button-primary" asp-controller="Home" asp-action="Index">Voltar ao painel</a>
+</div>

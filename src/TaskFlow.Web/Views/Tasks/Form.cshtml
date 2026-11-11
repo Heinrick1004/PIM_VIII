@@ -1,0 +1,62 @@
+@model TaskFormViewModel
+@{
+    var editing = Model.Id.HasValue;
+    ViewData["Title"] = editing ? "Editar tarefa" : "Nova tarefa";
+}
+<div class="breadcrumbs"><a asp-action="Index">Tarefas</a><span aria-hidden="true">/</span><span>@(editing ? "Editar" : "Nova")</span></div>
+<div class="page-heading"><p class="eyebrow">ADMINISTRAÇÃO</p><h1>@(editing ? "Editar tarefa" : "Criar tarefa")</h1><p class="page-subtitle">@(editing ? "Atualize os campos administrativos da tarefa." : "Preencha os dados para organizar uma nova demanda.")</p></div>
+<section class="panel form-panel">
+    <form asp-controller="Tasks" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack">
+        <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+        @if (editing)
+        {
+            <input asp-for="RowVersion" type="hidden" />
+        }
+        <div class="field">
+            <label asp-for="Title">Título <span class="required-mark">*</span></label>
+            <input asp-for="Title" maxlength="200" autocomplete="off" />
+            <span asp-validation-for="Title" class="field-error"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Description">Descrição</label>
+            <textarea asp-for="Description" rows="5" placeholder="Contexto, objetivo ou observações"></textarea>
+            <span asp-validation-for="Description" class="field-error"></span>
+        </div>
+        <div class="form-columns">
+            <div class="field">
+                <label asp-for="Priority">Prioridade</label>
+                <select asp-for="Priority">
+                    <option value="1">Baixa</option>
+                    <option value="2">Média</option>
+                    <option value="3">Alta</option>
+                </select>
+                <span asp-validation-for="Priority" class="field-error"></span>
+            </div>
+            <div class="field">
+                <label asp-for="DueLocal">Prazo (horário local)</label>
+                <input asp-for="DueLocal" type="datetime-local" step="1" value="@Model.DueLocal" data-due-local data-utc-value="@Model.DueUtcInitial" />
+                <input asp-for="TimezoneOffsetMinutes" type="hidden" data-timezone-offset />
+                <span class="field-hint">O fuso do seu navegador será aplicado explicitamente ao enviar.</span>
+                <span asp-validation-for="DueLocal" class="field-error"></span>
+            </div>
+        </div>
+        <div class="field">
+            <label asp-for="ResponsibleId">Responsável</label>
+            <select asp-for="ResponsibleId">
+                <option value="">Sem responsável</option>
+                @foreach (var employee in Model.Employees)
+                {
+                    <option value="@employee.Id">@employee.Name</option>
+                }
+            </select>
+            <span class="field-hint">Somente funcionários cadastrados podem ser atribuídos.</span>
+        </div>
+        <div class="form-actions">
+            <a class="button button-quiet" asp-action="@(editing ? "Details" : "Index")" asp-route-id="@Model.Id">Cancelar</a>
+            <button class="button button-primary" type="submit">@(editing ? "Salvar alterações" : "Criar tarefa")</button>
+        </div>
+    </form>
+</section>
+@section Scripts {
+    <script src="~/js/task-form.js" asp-append-version="true"></script>
+}

@@ -167,8 +167,7 @@ public sealed class DomainValidationTests
         Assert.Equal("AlterarTitulo", titulo.Acao);
         Assert.Equal("AlterarStatus", status.Acao);
         Assert.Equal("AlterarPrioridade", prioridade.Acao);
-        Assert.Contains("Validar entrega", titulo.Descricao);
-        Assert.Contains("Revisar entrega", titulo.Descricao);
+        Assert.Equal("Título alterado.", titulo.Descricao);
         Assert.Contains("Pendente", status.Descricao);
         Assert.Contains("EmAndamento", status.Descricao);
         Assert.Contains("Media", prioridade.Descricao);
@@ -181,6 +180,53 @@ public sealed class DomainValidationTests
             Assert.Equal(DataUtc, historico.DataUtc);
             Assert.Equal(DateTimeKind.Utc, historico.DataUtc.Kind);
         }
+    }
+
+    [Fact]
+    public void Tarefa_AlteracoesAdministrativasGeramHistoricoSemExporConteudoLivre()
+    {
+        var tarefa = NovaTarefa();
+        var usuarioId = Guid.NewGuid();
+        var newDeadline = DataUtc.AddDays(2);
+        var newAssignee = Guid.NewGuid();
+
+        var description = Assert.IsType<HistoricoTarefa>(
+            tarefa.AlterarDescricao("Private text that must not be copied to the audit log.", usuarioId, DataUtc));
+        var deadline = Assert.IsType<HistoricoTarefa>(
+            tarefa.AlterarPrazo(newDeadline, usuarioId, DataUtc));
+        var assignee = Assert.IsType<HistoricoTarefa>(
+            tarefa.AlterarResponsavel(newAssignee, usuarioId, DataUtc));
+
+        Assert.Equal("Private text that must not be copied to the audit log.", tarefa.Descricao);
+        Assert.Equal(newDeadline, tarefa.PrazoUtc);
+        Assert.Equal(newAssignee, tarefa.ResponsavelId);
+        Assert.Equal("AlterarDescricao", description.Acao);
+        Assert.Equal("Descrição alterada.", description.Descricao);
+        Assert.DoesNotContain("Private text", description.Descricao);
+        Assert.Equal("AlterarPrazo", deadline.Acao);
+        Assert.Equal("Prazo alterado.", deadline.Descricao);
+        Assert.Equal("AlterarResponsavel", assignee.Acao);
+        Assert.Equal("Responsável alterado.", assignee.Descricao);
+
+        Assert.Null(tarefa.AlterarDescricao(tarefa.Descricao, usuarioId, DataUtc));
+        Assert.Null(tarefa.AlterarPrazo(newDeadline, usuarioId, DataUtc));
+        Assert.Null(tarefa.AlterarResponsavel(newAssignee, usuarioId, DataUtc));
+        Assert.Equal("Descrição removida da tarefa.",
+            tarefa.AlterarDescricao(null, usuarioId, DataUtc)?.Descricao);
+        Assert.Equal("Prazo removido da tarefa.",
+            tarefa.AlterarPrazo(null, usuarioId, DataUtc)?.Descricao);
+        Assert.Equal("Responsável removido da tarefa.",
+            tarefa.AlterarResponsavel(null, usuarioId, DataUtc)?.Descricao);
+    }
+
+    [Fact]
+    public void Tarefa_SetRowVersionRejeitaVersaoInvalidaSemAlterarToken()
+    {
+        var tarefa = NovaTarefa(rowVersion: new byte[8]);
+        var current = tarefa.RowVersion;
+
+        Assert.Throws<ArgumentException>(() => tarefa.SetRowVersion(new byte[7]));
+        Assert.Equal(current, tarefa.RowVersion);
     }
 
     [Fact]

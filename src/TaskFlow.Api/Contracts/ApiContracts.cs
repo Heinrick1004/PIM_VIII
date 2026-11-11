@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TaskFlow.Domain.Enums;
 using TaskFlow.Domain.Entities;
 
@@ -29,6 +30,17 @@ public sealed record CreateTaskRequest(
     PrioridadeTarefa Prioridade,
     DateTime? PrazoUtc,
     Guid? ResponsavelId);
+
+public sealed record UpdateTaskStatusRequest(JsonElement Status = default, string? RowVersion = null);
+
+public sealed record UpdateTaskRequest(
+    JsonElement Titulo = default,
+    JsonElement Descricao = default,
+    JsonElement Prioridade = default,
+    JsonElement PrazoUtc = default,
+    JsonElement ResponsavelId = default,
+    string? RowVersion = null,
+    JsonElement Status = default);
 
 public sealed record PublicTaskResponse(
     Guid Id,

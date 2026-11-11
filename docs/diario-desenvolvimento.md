@@ -215,3 +215,38 @@ A revisão antecipada de 10/11 concluiu US01–US05 com critérios cobertos pelo
 ### Critérios US06 e próximos passos
 
 US06 está concluída: visibilidade de administrador/funcionário, filtros AND, contagem e paginação SQL, desempate determinístico, validação de entrada e revalidação de perfil foram exercitados com HTTP e persistência real. A Sprint 2 permanece aberta; próxima prioridade é US07, atualização concorrente com RowVersion e gravação atômica do histórico. Depois, reavaliar web e programação SQL pela capacidade disponível, sem declarar entregas ainda não executadas.
+
+## Dia 7 — atualização de tarefas, concorrência e histórico (concluído em 11/11/2026)
+
+### Implementação e auditoria
+
+- Implementados `PATCH /api/tasks/{id}/status` e `PUT /api/tasks/{id}` com contratos dedicados. O PATCH recebe apenas status e RowVersion; administrador pode alterar qualquer tarefa e funcionário somente tarefa pela qual seja responsável atual. O PUT exige administrador e aceita campos parciais de título, descrição, prioridade, prazo e responsável. `null` remove descrição/prazo/responsável; status não é editável pelo PUT.
+- RowVersion ausente, Base64 inválido ou tamanho diferente de oito bytes retorna 400. A versão fornecida é validada contra a entidade carregada e atribuída como token original antes do `UpdateAsync`; o mapeamento existente `_rowVersion` → `Versao` continua usando `IsRowVersion()`. `DbUpdateConcurrencyException` é convertido em 409. Tarefa inexistente retorna 404 e versão antiga é rejeitada mesmo se o status solicitado já for o atual.
+- Reatribuição verifica existência e perfil Funcionario, permite remoção, conserva criador e data original e altera imediatamente a autorização por vínculo. O autor de cada evento é obtido exclusivamente do JWT validado.
+- Métodos de domínio registram eventos somente quando há mudança. Alterações compostas escrevem tarefa e eventos dentro da transação do `IUnitOfWork`; falha inesperada propaga HTTP 500 e o descarte da transação faz rollback. Descrições de histórico não copiam texto livre nem IDs de responsável.
+- Auditoria encontrou e corrigiu o parser numérico de enum (respeitando o tipo subjacente byte), rejeitou status no PUT, restringiu datas de prazo a UTC e corrigiu payloads não objeto/valores inválidos sem exceções não tratadas. A RowVersion fornecida agora é a versão original efetiva do update EF.
+- Nenhuma migration foi necessária: coluna `Versao`, backing field e concorrência já estavam corretamente mapeados. `TaskFlowDev` não foi acessado; os testes usaram apenas bancos temporários `TaskFlowIntegrationTests_<GUID>`.
+
+### Testes novos e resultados
+
+Adicionados 14 casos automatizados em relação à baseline de 76: 12 casos HTTP/SQL Server e 2 testes de domínio. Os testes novos percorrem autenticação JWT e SQL Server real, sem EF InMemory.
+
+| Verificação | Resultado |
+| --- | --- |
+| `dotnet restore TaskFlow.sln` | Sucesso |
+| `dotnet build TaskFlow.sln` | Sucesso; 0 avisos, 0 erros |
+| `dotnet test TaskFlow.sln` | **90 aprovados, 0 reprovados, 0 ignorados** |
+| Categoria Domain | 27 aprovados, 0 reprovados, 0 ignorados |
+| Categoria HTTP | 49 aprovados, 0 reprovados, 0 ignorados |
+| Categoria SQL Server | 55 aprovados, 0 reprovados, 0 ignorados |
+| Categoria Security | 2 aprovados, 0 reprovados, 0 ignorados |
+| Concorrência SQL via HTTP | Escrita concorrente em segundo `DbContext` independente incrementa o token; a requisição HTTP vencida retorna 409, mantém o valor concorrente e não persiste histórico. |
+| Rollback histórico | Falha injetada depois de um evento salvo em transação confirma, em novo contexto, valores/RowVersion anteriores e histórico vazio. |
+| Permissões e reatribuição | Administrador, responsável novo/antigo, criador, funcionário sem vínculo e anônimo exercitados; responsabilidade removível, criador continua com consulta e autor vem da identidade autenticada. |
+| Auditoria/no-op | Todos os campos alterados geram ações correspondentes; status/admin sem mudança não duplicam eventos nem avançam RowVersion. |
+
+HTTP e SQL Server se sobrepõem nos testes integrados; os totais por categoria não devem ser somados. A cobertura detalhada da US07 está no [backlog](backlog.md); a demonstração manual com usuários no `TaskFlowDev` permanece pendente e não é substituída pelos testes automatizados.
+
+### Sprint 2
+
+US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aberta: web responsiva (US08) e objetos SQL planejados (US09) continuam pendentes de implementação e validação.

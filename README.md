@@ -4,11 +4,13 @@ Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia 
 
 ## Estado da implementação
 
-**Dia 6 — listagem segura de tarefas:** `GET /api/tasks` oferece filtros combináveis, contagem e paginação no SQL Server. Administradores veem todas as tarefas; funcionários veem apenas as que criaram ou das quais são responsáveis. A consulta é `AsNoTracking`, ordenada por data de criação e Id decrescentes, com RowVersion em Base64. Os testes usam SQL Server isolado; a Sprint 2 permanece em andamento.
+**Dia 6 — listagem segura de tarefas:** `GET /api/tasks` oferece filtros combináveis, contagem e paginação no SQL Server. Administradores veem todas as tarefas; funcionários veem apenas as que criaram ou das quais são responsáveis. A consulta é `AsNoTracking`, ordenada por data de criação e Id decrescentes, com RowVersion em Base64.
 
-Validação final Dia 6: restore concluído; build sem avisos/erros; **76 testes aprovados, 0 reprovados e 0 ignorados**. Categorias: Domain 25, HTTP 37, SQL Server 43 e Security 2; HTTP/SQL se sobrepõem nos testes integrados. Os resultados estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+**Dia 7 — atualização de tarefas com concorrência e histórico:** `PATCH /api/tasks/{id}/status` e `PUT /api/tasks/{id}` validam `rowVersion`, aplicam regras de autorização, preservam `CriadorId`/`CriadaEmUtc`, reatribuem responsável, geram histórico atomicamente e retornam HTTP 409 em conflito SQL Server. US07 concluída por testes HTTP com SQL Server real isolado.
 
-O histórico validado dos Dias 1–5 permanece documentado em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md); a validação do Dia 6 está registrada nessas mesmas páginas após a execução final.
+Validação final Dia 7: restore e build concluídos (0 avisos/erros); **90 testes aprovados, 0 reprovados e 0 ignorados**. Categorias: Domain 27, HTTP 49, SQL Server 55 e Security 2; HTTP/SQL se sobrepõem nos testes integrados. Os resultados estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+
+O histórico validado dos Dias 1–6 permanece documentado em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md); a validação do Dia 7 está registrada nessas mesmas páginas após a execução final.
 
 ## Tecnologias e requisitos
 
@@ -74,12 +76,14 @@ Invoke-RestMethod http://localhost:5046/api/info
 | `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
 | `POST /api/tasks` | Somente Administrador; cria tarefa e histórico atomicamente; responsável funcionário opcional |
 | `GET /api/tasks` | JWT obrigatório; lista paginada, filtros `status`, `prioridade`, `responsavelId`, `semResponsavel` e `titulo`; `page` (1) / `pageSize` (20, máximo 100); administrador vê tudo, funcionário vê tarefas criadas ou atribuídas a si |
+| `PATCH /api/tasks/{id}/status` | JWT obrigatório; exige `status` e `rowVersion` Base64 de 8 bytes; administrador pode atualizar qualquer tarefa, funcionário somente se responsável atual; retorna 409 em versão desatualizada |
+| `PUT /api/tasks/{id}` | Somente Administrador; exige `rowVersion` e atualiza somente campos administrativos enviados (`titulo`, `descricao`, `prioridade`, `prazoUtc`, `responsavelId`); descrição, prazo e responsável aceitam `null` para remoção; status é alterado exclusivamente pela rota PATCH |
 | `GET /api/tasks/{id}` | JWT obrigatório; Administrador consulta qualquer tarefa, funcionário somente se criador ou responsável |
 | `GET /api/tasks/{id}/history` | JWT obrigatório; mesma regra de visibilidade, histórico somente leitura e paginação `page` (1) / `pageSize` (20, máximo 100) |
 | `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
 | `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
 
-Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada. Filtros da lista são combinados com AND; `semResponsavel=true` seleciona tarefas sem responsável. A resposta paginada tem `items`, `page`, `pageSize` e `totalCount`. A resposta de tarefa apresenta RowVersion em Base64. Atualizações/reatribuições e endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada. Filtros da lista são combinados com AND; `semResponsavel=true` seleciona tarefas sem responsável. A resposta paginada tem `items`, `page`, `pageSize` e `totalCount`. A resposta de tarefa apresenta RowVersion em Base64. Cada mudança efetiva persiste seus eventos na mesma transação; eventos não copiam texto livre ou identificadores de responsável para a descrição. Endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
 
 O histórico retorna `{ items, page, pageSize, totalCount }`; cada item contém `id`, `tarefaId`, `usuarioId`, `acao`, `dataUtc` e `descricao`. A ordenação é ascendente por data UTC e Id para desempate.
 

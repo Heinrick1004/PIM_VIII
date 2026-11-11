@@ -593,6 +593,367 @@ public sealed class TaskEndpointTests
         Assert.Equal("Other task", Assert.Single(adminPage.Items).Titulo);
     }
 
+    [Fact]
+    public async Task TaskStatusUpdate_EnforcesPermissionsAndRejectsStaleVersionWithoutDuplicateHistory()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var creator = await SeedUserAsync("Creator", "creator@task.test", PerfilUsuario.Funcionario);
+        var assignee = await SeedUserAsync("Assignee", "assignee@task.test", PerfilUsuario.Funcionario);
+        var outsider = await SeedUserAsync("Outsider", "outsider@task.test", PerfilUsuario.Funcionario);
+        var task = await SeedTaskAsync(creator.Id, assigneeId: assignee.Id);
+        var originalVersion = Convert.ToBase64String(task.RowVersion!);
+        await using var factory = CreateFactory();
+        using var adminClient = await LoginAsync(factory, admin.Email);
+        using var creatorClient = await LoginAsync(factory, creator.Email);
+        using var assigneeClient = await LoginAsync(factory, assignee.Email);
+        using var outsiderClient = await LoginAsync(factory, outsider.Email);
+        using var anonymousClient = factory.CreateClient();
+        var originalRequest = new { status = StatusTarefa.EmAndamento, rowVersion = originalVersion };
+
+        using var anonymous = await anonymousClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", originalRequest);
+        using var creatorOnly = await creatorClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", originalRequest);
+        using var outsiderResponse = await outsiderClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", originalRequest);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, creatorOnly.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, outsiderResponse.StatusCode);
+
+        using var adminUpdate = await adminClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", originalRequest);
+        Assert.Equal(HttpStatusCode.OK, adminUpdate.StatusCode);
+        var adminResult = await adminUpdate.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(adminResult);
+        Assert.NotEqual(originalVersion, adminResult.RowVersion);
+
+        using var assigneeUpdate = await assigneeClient.PatchAsJsonAsync(
+            $"/api/tasks/{task.Id}/status",
+            new { status = StatusTarefa.Concluida, rowVersion = adminResult.RowVersion });
+        Assert.Equal(HttpStatusCode.OK, assigneeUpdate.StatusCode);
+        var assigneeResult = await assigneeUpdate.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(assigneeResult);
+        Assert.NotEqual(adminResult.RowVersion, assigneeResult.RowVersion);
+
+        using var repeated = await assigneeClient.PatchAsJsonAsync(
+            $"/api/tasks/{task.Id}/status",
+            new { status = StatusTarefa.Concluida, rowVersion = assigneeResult.RowVersion });
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        using var staleNoOp = await assigneeClient.PatchAsJsonAsync(
+            $"/api/tasks/{task.Id}/status",
+            new { status = StatusTarefa.Concluida, rowVersion = originalVersion });
+        Assert.Equal(HttpStatusCode.Conflict, staleNoOp.StatusCode);
+
+        await using (var adminProfileContext = _database.CreateContext())
+        {
+            var storedAdmin = await adminProfileContext.Usuarios.SingleAsync(item => item.Id == admin.Id);
+            storedAdmin.UpdateProfile(storedAdmin.Nome, storedAdmin.Email, PerfilUsuario.Funcionario);
+            await adminProfileContext.SaveChangesAsync();
+        }
+
+        using var demotedAdminUpdate = await adminClient.PatchAsJsonAsync(
+            $"/api/tasks/{task.Id}/status",
+            new { status = StatusTarefa.Pendente, rowVersion = assigneeResult.RowVersion });
+        Assert.Equal(HttpStatusCode.Forbidden, demotedAdminUpdate.StatusCode);
+
+        await using var verification = _database.CreateContext();
+        var storedTask = await verification.Tarefas.SingleAsync(item => item.Id == task.Id);
+        var history = await verification.HistoricoTarefas
+            .Where(item => item.TarefaId == task.Id)
+            .OrderBy(item => item.DataUtc)
+            .ToListAsync();
+        Assert.Equal(StatusTarefa.Concluida, storedTask.Status);
+        Assert.Equal(assigneeResult.RowVersion, Convert.ToBase64String(storedTask.RowVersion!));
+        Assert.Equal(new[] { admin.Id, assignee.Id }, history.Select(item => item.UsuarioId));
+        Assert.All(history, item => Assert.Equal("AlterarStatus", item.Acao));
+        Assert.Equal(2, history.Count);
+    }
+
+    [Theory]
+    [InlineData("{\"status\":2}")]
+    [InlineData("{\"status\":2,\"rowVersion\":\"not-base64\"}")]
+    [InlineData("{\"status\":2,\"rowVersion\":\"AQIDBAUGBw==\"}")]
+    [InlineData("{\"status\":2,\"rowVersion\":\"\"}")]
+    public async Task TaskStatusUpdate_RejectsMissingOrInvalidRowVersion(string json)
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var task = await SeedTaskAsync(admin.Id);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, admin.Email);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var response = await client.PatchAsync($"/api/tasks/{task.Id}/status", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var context = _database.CreateContext();
+        Assert.Equal(StatusTarefa.Pendente, (await context.Tarefas.SingleAsync(item => item.Id == task.Id)).Status);
+        Assert.Empty(await context.HistoricoTarefas.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("99")]
+    [InlineData("257")]
+    [InlineData("\"invalid\"")]
+    public async Task TaskStatusUpdate_RejectsInvalidStatus(string statusJson)
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var task = await SeedTaskAsync(admin.Id);
+        var rowVersion = Convert.ToBase64String(task.RowVersion!);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, admin.Email);
+        using var content = new StringContent(
+            $"{{\"status\":{statusJson},\"rowVersion\":\"{rowVersion}\"}}",
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await client.PatchAsync($"/api/tasks/{task.Id}/status", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var context = _database.CreateContext();
+        Assert.Equal(StatusTarefa.Pendente, (await context.Tarefas.SingleAsync(item => item.Id == task.Id)).Status);
+        Assert.Empty(await context.HistoricoTarefas.ToListAsync());
+    }
+
+    [Fact]
+    public async Task TaskStatusUpdate_UsesSqlServerRowVersionForConcurrentHttpConflict()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var task = await SeedTaskAsync(admin.Id);
+        var originalVersion = Convert.ToBase64String(task.RowVersion!);
+        await using var factory = CreateFactory(raceBeforeTaskUpdate: true);
+        using var client = await LoginAsync(factory, admin.Email);
+
+        using var response = await client.PatchAsJsonAsync(
+            $"/api/tasks/{task.Id}/status",
+            new { status = StatusTarefa.EmAndamento, rowVersion = originalVersion });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verification = _database.CreateContext();
+        var persistedTask = await verification.Tarefas.SingleAsync(item => item.Id == task.Id);
+        Assert.Equal(StatusTarefa.Concluida, persistedTask.Status);
+        Assert.NotEqual(originalVersion, Convert.ToBase64String(persistedTask.RowVersion!));
+        Assert.Empty(await verification.HistoricoTarefas.Where(item => item.TarefaId == task.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdminTaskUpdate_ReassignsAndRemovesAssigneeWithAtomicHistoryAndStableIdentity()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var creator = await SeedUserAsync("Creator", "creator@task.test", PerfilUsuario.Funcionario);
+        var oldAssignee = await SeedUserAsync("Old Assignee", "old@task.test", PerfilUsuario.Funcionario);
+        var newAssignee = await SeedUserAsync("New Assignee", "new@task.test", PerfilUsuario.Funcionario);
+        var createdAt = new DateTime(2026, 11, 10, 12, 0, 0, DateTimeKind.Utc);
+        var initialDeadline = createdAt.AddDays(1);
+        var task = new Tarefa(
+            Guid.NewGuid(),
+            "Original title",
+            "Original description",
+            StatusTarefa.Pendente,
+            PrioridadeTarefa.Baixa,
+            createdAt,
+            initialDeadline,
+            creator.Id,
+            oldAssignee.Id);
+        await using (var context = _database.CreateContext())
+        {
+            await new TarefaRepository(context).AddAsync(task);
+        }
+
+        await using var factory = CreateFactory();
+        using var adminClient = await LoginAsync(factory, admin.Email);
+        using var creatorClient = await LoginAsync(factory, creator.Email);
+        using var oldClient = await LoginAsync(factory, oldAssignee.Email);
+        using var newClient = await LoginAsync(factory, newAssignee.Email);
+        using var employeeEdit = await oldClient.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            titulo = "Forbidden edit",
+            rowVersion = Convert.ToBase64String(task.RowVersion!)
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, employeeEdit.StatusCode);
+        using var creatorStatus = await creatorClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", new
+        {
+            status = StatusTarefa.EmAndamento,
+            rowVersion = Convert.ToBase64String(task.RowVersion!)
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, creatorStatus.StatusCode);
+
+        var nextDeadline = createdAt.AddDays(3);
+        using var update = await adminClient.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            titulo = "Updated title",
+            descricao = "Updated description",
+            prioridade = PrioridadeTarefa.Alta,
+            prazoUtc = nextDeadline,
+            responsavelId = newAssignee.Id,
+            criadorId = admin.Id,
+            criadaEmUtc = DateTime.UtcNow.AddYears(10),
+            rowVersion = Convert.ToBase64String(task.RowVersion!)
+        });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var updated = await update.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(updated);
+        Assert.Equal("Updated title", updated.Titulo);
+        Assert.Equal("Updated description", updated.Descricao);
+        Assert.Equal(PrioridadeTarefa.Alta, updated.Prioridade);
+        Assert.Equal(nextDeadline, updated.PrazoUtc);
+        Assert.Equal(newAssignee.Id, updated.ResponsavelId);
+        Assert.NotEqual(Convert.ToBase64String(task.RowVersion!), updated.RowVersion);
+        Assert.Equal(creator.Id, updated.CriadorId);
+        Assert.Equal(createdAt, updated.CriadaEmUtc);
+
+        using var unchangedUpdate = await adminClient.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            titulo = updated.Titulo,
+            descricao = updated.Descricao,
+            prioridade = updated.Prioridade,
+            prazoUtc = updated.PrazoUtc,
+            responsavelId = updated.ResponsavelId,
+            rowVersion = updated.RowVersion
+        });
+        Assert.Equal(HttpStatusCode.OK, unchangedUpdate.StatusCode);
+        var unchanged = await unchangedUpdate.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(unchanged);
+        Assert.Equal(updated.RowVersion, unchanged.RowVersion);
+        await using (var historyContext = _database.CreateContext())
+        {
+            Assert.Equal(5, await historyContext.HistoricoTarefas.CountAsync(item => item.TarefaId == task.Id));
+        }
+
+        using var oldDetail = await oldClient.GetAsync($"/api/tasks/{task.Id}");
+        using var creatorDetail = await creatorClient.GetAsync($"/api/tasks/{task.Id}");
+        using var newDetail = await newClient.GetAsync($"/api/tasks/{task.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, oldDetail.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, creatorDetail.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, newDetail.StatusCode);
+        using var newStatusUpdate = await newClient.PatchAsJsonAsync($"/api/tasks/{task.Id}/status", new
+        {
+            status = StatusTarefa.EmAndamento,
+            rowVersion = updated.RowVersion
+        });
+        Assert.Equal(HttpStatusCode.OK, newStatusUpdate.StatusCode);
+        var statusUpdated = await newStatusUpdate.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(statusUpdated);
+
+        using var removeAssignee = await adminClient.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            responsavelId = (Guid?)null,
+            rowVersion = statusUpdated.RowVersion
+        });
+        Assert.Equal(HttpStatusCode.OK, removeAssignee.StatusCode);
+        var unassigned = await removeAssignee.Content.ReadFromJsonAsync<PublicTaskResponse>();
+        Assert.NotNull(unassigned);
+        Assert.Null(unassigned.ResponsavelId);
+
+        using var formerNewAssigneeDetail = await newClient.GetAsync($"/api/tasks/{task.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, formerNewAssigneeDetail.StatusCode);
+        using var filteredList = await creatorClient.GetAsync("/api/tasks?titulo=Updated");
+        var creatorTasks = await filteredList.Content.ReadFromJsonAsync<PagedTasksResponse>();
+        Assert.NotNull(creatorTasks);
+        Assert.Contains(creatorTasks.Items, item => item.Id == task.Id);
+        using var historyResponse = await creatorClient.GetAsync($"/api/tasks/{task.Id}/history");
+        var taskHistory = await historyResponse.Content.ReadFromJsonAsync<PagedTaskHistoryResponse>();
+        Assert.NotNull(taskHistory);
+        Assert.Equal(
+            new[] { "AlterarTitulo", "AlterarDescricao", "AlterarPrioridade", "AlterarPrazo", "AlterarResponsavel", "AlterarStatus", "AlterarResponsavel" }.Order(),
+            taskHistory.Items.Select(item => item.Acao).Order());
+        await using (var historyOrderContext = _database.CreateContext())
+        {
+            var expectedHistoryOrder = await historyOrderContext.HistoricoTarefas
+                .Where(item => item.TarefaId == task.Id)
+                .OrderBy(item => item.DataUtc)
+                .ThenBy(item => item.Id)
+                .Select(item => item.Id)
+                .ToListAsync();
+            Assert.Equal(expectedHistoryOrder, taskHistory.Items.Select(item => item.Id));
+        }
+        Assert.Equal(6, taskHistory.Items.Count(item => item.UsuarioId == admin.Id));
+        Assert.Single(taskHistory.Items, item => item.UsuarioId == newAssignee.Id);
+        Assert.Single(taskHistory.Items, item => item.Acao == "AlterarStatus");
+        Assert.All(taskHistory.Items, item => Assert.Equal(DateTimeKind.Utc, item.DataUtc.Kind));
+
+        await using var verification = _database.CreateContext();
+        var storedTask = await verification.Tarefas.SingleAsync(item => item.Id == task.Id);
+        Assert.Equal(creator.Id, storedTask.CriadorId);
+        Assert.Equal(createdAt, storedTask.CriadaEmUtc);
+        Assert.Null(storedTask.ResponsavelId);
+        Assert.Equal(StatusTarefa.EmAndamento, storedTask.Status);
+    }
+
+    [Fact]
+    public async Task AdminTaskUpdate_RejectsUnknownOrNonEmployeeAssignee()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var task = await SeedTaskAsync(admin.Id);
+        var rowVersion = Convert.ToBase64String(task.RowVersion!);
+        await using var factory = CreateFactory();
+        using var client = await LoginAsync(factory, admin.Email);
+
+        using var malformedVersion = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            titulo = "Must not be applied",
+            rowVersion = "not-base64"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, malformedVersion.StatusCode);
+        using var localOffsetDeadline = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            prazoUtc = "2026-11-20T12:00:00-03:00",
+            rowVersion
+        });
+        using var unspecifiedDeadline = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            prazoUtc = "2026-11-20T12:00:00",
+            rowVersion
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, localOffsetDeadline.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, unspecifiedDeadline.StatusCode);
+
+        using var missingAssignee = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            responsavelId = Guid.NewGuid(),
+            rowVersion
+        });
+        using var adminAssignee = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            responsavelId = admin.Id,
+            rowVersion
+        });
+        Assert.Equal(HttpStatusCode.NotFound, missingAssignee.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, adminAssignee.StatusCode);
+
+        await using var verification = _database.CreateContext();
+        var storedTask = await verification.Tarefas.SingleAsync(item => item.Id == task.Id);
+        Assert.Null(storedTask.ResponsavelId);
+        Assert.Empty(await verification.HistoricoTarefas.Where(item => item.TarefaId == task.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdminTaskUpdate_RollsBackAllFieldsAndHistoryWhenHistoryWriteFails()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var task = await SeedTaskAsync(admin.Id);
+        var originalVersion = Convert.ToBase64String(task.RowVersion!);
+        await using var factory = CreateFactory(failAfterHistorySave: true);
+        using var client = await LoginAsync(factory, admin.Email);
+
+        using var response = await client.PutAsJsonAsync($"/api/tasks/{task.Id}", new
+        {
+            titulo = "Must roll back",
+            descricao = "This event insert will be forced to fail after save.",
+            rowVersion = originalVersion
+        });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        await using var verification = _database.CreateContext();
+        var persistedTask = await verification.Tarefas.SingleAsync(item => item.Id == task.Id);
+        Assert.Equal("Task for history tests", persistedTask.Titulo);
+        Assert.Null(persistedTask.Descricao);
+        Assert.Equal(originalVersion, Convert.ToBase64String(persistedTask.RowVersion!));
+        Assert.Empty(await verification.HistoricoTarefas.Where(item => item.TarefaId == task.Id).ToListAsync());
+    }
+
     private async Task<Usuario> SeedUserAsync(string name, string email, PerfilUsuario profile)
     {
         var user = new Usuario(Guid.NewGuid(), name, email, "temporary", profile);
@@ -650,7 +1011,9 @@ public sealed class TaskEndpointTests
         return client;
     }
 
-    private WebApplicationFactory<Program> CreateFactory(bool failAfterHistorySave = false) =>
+    private WebApplicationFactory<Program> CreateFactory(
+        bool failAfterHistorySave = false,
+        bool raceBeforeTaskUpdate = false) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
@@ -674,6 +1037,18 @@ public sealed class TaskEndpointTests
                     services.RemoveAll<IHistoricoTarefaRepository>();
                     services.AddScoped<IHistoricoTarefaRepository>(serviceProvider =>
                         new FailingHistoryRepository(serviceProvider.GetRequiredService<TaskFlowDbContext>()));
+                });
+            }
+
+            if (raceBeforeTaskUpdate)
+            {
+                builder.ConfigureServices(services =>
+                {
+                    services.RemoveAll<ITarefaRepository>();
+                    services.AddScoped<ITarefaRepository>(serviceProvider =>
+                        new RacingTaskRepository(
+                            new TarefaRepository(serviceProvider.GetRequiredService<TaskFlowDbContext>()),
+                            _database.ConnectionString));
                 });
             }
         });
@@ -706,5 +1081,75 @@ public sealed class TaskEndpointTests
             int pageSize,
             CancellationToken cancellationToken = default) =>
             _inner.ListPageByTarefaIdAsync(tarefaId, page, pageSize, cancellationToken);
+    }
+
+    private sealed class RacingTaskRepository : ITarefaRepository
+    {
+        private readonly ITarefaRepository _inner;
+        private readonly string _connectionString;
+        private int _raced;
+
+        public RacingTaskRepository(ITarefaRepository inner, string connectionString)
+        {
+            _inner = inner;
+            _connectionString = connectionString;
+        }
+
+        public Task AddAsync(Tarefa tarefa, CancellationToken cancellationToken = default) =>
+            _inner.AddAsync(tarefa, cancellationToken);
+
+        public Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+            _inner.GetByIdAsync(id, cancellationToken);
+
+        public Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
+            int page,
+            int pageSize,
+            Guid? visibleUserId,
+            StatusTarefa? status = null,
+            PrioridadeTarefa? prioridade = null,
+            Guid? responsavelId = null,
+            bool semResponsavel = false,
+            string? titulo = null,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListPageAsync(
+                page,
+                pageSize,
+                visibleUserId,
+                status,
+                prioridade,
+                responsavelId,
+                semResponsavel,
+                titulo,
+                cancellationToken);
+
+        public Task<IReadOnlyList<Tarefa>> ListAsync(
+            int skip,
+            int take,
+            StatusTarefa? status = null,
+            Guid? responsavelId = null,
+            string? titulo = null,
+            CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(skip, take, status, responsavelId, titulo, cancellationToken);
+
+        public async Task UpdateAsync(Tarefa tarefa, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref _raced, 1) == 0)
+            {
+                var options = new DbContextOptionsBuilder<TaskFlowDbContext>()
+                    .UseSqlServer(_connectionString)
+                    .Options;
+                await using var competingContext = new TaskFlowDbContext(options);
+                var competingRepository = new TarefaRepository(competingContext);
+                var competingTask = await competingRepository.GetByIdAsync(tarefa.Id, cancellationToken);
+                Assert.NotNull(competingTask);
+                Assert.NotNull(competingTask.AlterarStatus(
+                    StatusTarefa.Concluida,
+                    competingTask.CriadorId,
+                    DateTime.UtcNow));
+                await competingRepository.UpdateAsync(competingTask, cancellationToken);
+            }
+
+            await _inner.UpdateAsync(tarefa, cancellationToken);
+        }
     }
 }

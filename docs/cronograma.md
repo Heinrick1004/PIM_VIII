@@ -29,6 +29,8 @@ O Dia 5 foi implementado em 10/11, também antecipadamente: consulta do históri
 
 O Dia 6 foi implementado em 10/11: `GET /api/tasks` filtra e pagina no SQL Server com escopo de administrador/funcionário aplicado antes das demais operações da query. Foram adicionados filtros combináveis, ordenação determinística e testes HTTP/SQL Server em banco isolado. US06 foi concluída; a Sprint 2 segue aberta para atualização concorrente, clientes e demais entregas.
 
+O Dia 7 foi concluído em 11/11: atualização de status com autorização por responsável atual, edição administrativa parcial, reatribuição/remoção, RowVersion aplicado como token concorrente efetivo do EF e histórico transacional. Testes HTTP com SQL Server real isolado comprovaram 409 sob corrida de dois DbContexts, preservação da gravação vencedora, rollback de histórico, permissões e visibilidade após reatribuição. US07 foi concluída; a Sprint 2 continua em andamento para US08–US09. `TaskFlowDev` não foi acessado, e a demonstração manual permanece pendente.
+
 ## Dependências e riscos de prazo
 
 - O Dia 2 depende de acesso a uma instância real de SQL Server. Não substituir persistência por respostas estáticas para apresentar conclusão.

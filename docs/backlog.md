@@ -12,7 +12,7 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US04 | Como administrador, quero gerenciar usuários para distribuir o trabalho entre pessoas cadastradas. | P1 / 3 | RF02, RNF02, RNF03 | Somente administrador cadastra/lista/altera; e-mail duplicado tratado; perfil validado; exclusão definitiva fora do MVP; nenhuma senha em texto puro. | S1 |
 | US05 | Como administrador, quero cadastrar e atribuir tarefas para organizar as demandas internas. | P1 / 5 | RF03, RF05, RF06 | Criação inicia Pendente; título, prioridade e usuários validados; prazo opcional em UTC; autor vem da identidade; criação e histórico confirmados na mesma transação. | S1 |
 | US06 | Como funcionário, quero consultar minhas tarefas para acompanhar prioridades e prazos. | P1 / 3 | RF04, RNF02 | Listagem paginada com filtros combináveis de status, prioridade, responsável, título e sem responsável; funcionário vê apenas tarefas em que é criador ou responsável; administrador vê todas; filtros, contagem e paginação no SQL; ordenação estável. | S2 |
-| US07 | Como responsável, quero atualizar o status da minha tarefa com histórico e proteção contra sobrescrita. | P1 / 5 | RF05, RF06, RNF03, RNF04 | Matriz de permissões aplicada; alteração efetiva gera histórico; campos administrativos protegidos; versão antiga gera 409; falha no histórico desfaz a mudança; nenhum histórico duplicado. | S2 |
+| US07 | Como responsável, quero atualizar o status da minha tarefa, e como administrador quero editar seus campos administrativos, com histórico e proteção contra sobrescrita. | P1 / 5 | RF05, RF06, RNF03, RNF04 | `PATCH` só permite status ao responsável atual ou administrador; `PUT` administrativo permite título, descrição, prioridade, prazo e reatribuição (inclusive remoção); toda escrita requer RowVersion; conflito real gera 409; histórico de mudanças efetivas é atômico, sem evento duplicado; criador e data de criação são imutáveis. | S2 |
 | US08 | Como usuário, quero consultar tarefas em uma interface web responsiva. | P1 / 5 | RF07, RNF05 | Login, lista/detalhe e mudança de status integrados à API; usabilidade em 360 px e desktop; rótulos e teclado; erros reais apresentados ao usuário. | S2 |
 | US09 | Como avaliador, quero evidências de programação de banco para verificar procedures, functions, triggers e transações. | P2 / 5 | RF04, RF06, RNF03 | Implementar objetos SQL com finalidade definida, parâmetros e testes; procedure de consulta e function com uso demonstrado; trigger sem duplicar auditoria; cenário de commit/rollback documentado. | S2 |
 | US10 | Como funcionário, quero consultar e atualizar minhas tarefas pelo aplicativo Flutter mínimo. | P2 / 3 | RF07, RNF02 | Cliente consome a API; login, consulta e mudança de status; lida com falha de rede e autorização; não inclui acesso direto ao banco nem credenciais fixas. | S3 |
@@ -20,12 +20,13 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 6
+## Estado executado até o Dia 7
 
 - **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
 - **US06 concluída no Dia 6:** lista protegida com visibilidade por criador/responsável, filtros AND, contagem/paginação SQL, ordenação estável e testes HTTP/SQL Server isolados.
-- **Parciais ou planejadas:** US07 (atualizações), US08–US13 e as demais integrações continuam pendentes.
+- **US07 concluída no Dia 7:** alteração de status por administrador/responsável atual, edição administrativa parcial, reatribuição e remoção, RowVersion aplicado como token original EF e validado sob corrida real no SQL Server, eventos transacionais e rollback em falha de histórico.
+- **Parciais ou planejadas:** US08–US13 e as demais integrações continuam pendentes.
 
 ### Revisão da US06 — Dia 6
 
@@ -36,6 +37,18 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | Contagem, paginação e ordenação são estáveis e executadas em SQL | Teste confirma contagem total, páginas sem sobreposição, página além do total vazia e desempate por Id em tarefas com a mesma data de criação. |
 | Entradas inválidas são rejeitadas, autenticação é exigida e perfil corrente prevalece | Mesmo teste verifica 400 para limites/enums/combinação inválida, 401 anônimo; `TaskList_UsesCurrentDatabaseProfileForVisibility` verifica a revalidação de perfil. |
 | Isolamento e persistência reais | Testes usam `TaskFlowIntegrationTests_<GUID>` e consultam as tarefas persistidas; não usam EF InMemory nem `TaskFlowDev`. |
+
+### Revisão da US07 — Dia 7
+
+| Critério | Evidência verificada |
+| --- | --- |
+| Status permitido apenas para administrador ou responsável atual; criador isolado/funcionário sem vínculo/anônimo recebem 403/401 | `TaskStatusUpdate_EnforcesPermissionsAndRejectsStaleVersionWithoutDuplicateHistory` atravessa JWT, middleware e SQL Server temporário. |
+| Token obrigatório, Base64 válido de 8 bytes; versão antiga retorna 409 inclusive em no-op; atualização efetiva muda a versão | Testes de contrato/status verificam ausência, formato/tamanho incorreto, repetição atual sem evento e versão antiga rejeitada. |
+| Conflito do mecanismo de concorrência SQL, sem sobrescrita nem histórico da requisição vencida | `TaskStatusUpdate_UsesSqlServerRowVersionForConcurrentHttpConflict` carrega uma instância da tarefa no pipeline HTTP e atualiza concorrente com outro `DbContext`; EF recebe `DbUpdateConcurrencyException`, API responde 409 e o novo estado no banco permanece sem evento parcial. |
+| Edição/reatribuição administrativa e visibilidade atual | `AdminTaskUpdate_ReassignsAndRemovesAssigneeWithAtomicHistoryAndStableIdentity` testa todos os campos, novo status pelo novo responsável, perda de acesso do antigo, consulta do criador, remoção do responsável, listagem/histórico e imutabilidade de criador/data. |
+| Referência de usuário e perfil de responsável | `AdminTaskUpdate_RejectsUnknownOrNonEmployeeAssignee` comprova 404 para inexistente e 400 para perfil Administrador. |
+| Histórico atômico e atualizações sem efeito | `AdminTaskUpdate_RollsBackAllFieldsAndHistoryWhenHistoryWriteFails` injeta falha depois do primeiro `SaveChangesAsync`; novo contexto SQL confirma rollback de valores, rowversion e eventos. A edição idêntica preserva RowVersion e contagem de histórico. |
+| Eventos não duplicados e sem cópia de texto livre | Os testes de domínio cobrem ações e no-op; descrições de auditoria são genéricas e não copiam título, descrição ou identificadores de responsável. |
 
 ## Revisão e retrospectiva da Sprint 1 — 10/11/2026
 

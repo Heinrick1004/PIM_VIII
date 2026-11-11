@@ -5,7 +5,7 @@ namespace TaskFlow.Domain.Entities;
 public sealed class Tarefa
 {
     public const int TituloMaxLength = 200;
-    private readonly byte[]? _rowVersion;
+    private byte[]? _rowVersion;
 
     public Tarefa(
         Guid id,
@@ -86,6 +86,22 @@ public sealed class Tarefa
     /// </summary>
     public byte[]? RowVersion => _rowVersion?.ToArray();
 
+    public void SetRowVersion(byte[]? rowVersion)
+    {
+        if (rowVersion is null)
+        {
+            _rowVersion = null;
+            return;
+        }
+
+        if (rowVersion.Length != 8)
+        {
+            throw new ArgumentException("A versão do SQL Server deve conter exatamente 8 bytes.", nameof(rowVersion));
+        }
+
+        _rowVersion = rowVersion.ToArray();
+    }
+
     /// <summary>
     /// Retorna o registro que o caso de uso deve persistir junto com a tarefa,
     /// na mesma transação. Uma operação sem mudança retorna nulo.
@@ -104,9 +120,25 @@ public sealed class Tarefa
             return null;
         }
 
-        var historico = CriarHistorico(usuarioId, dataUtc, "AlterarTitulo",
-            $"Título alterado de \"{Titulo}\" para \"{novoTitulo}\".");
+        var historico = CriarHistorico(usuarioId, dataUtc, "AlterarTitulo", "Título alterado.");
         Titulo = novoTitulo;
+        return historico;
+    }
+
+    public HistoricoTarefa? AlterarDescricao(string? descricao, Guid usuarioId, DateTime dataUtc)
+    {
+        ValidarAutorEData(usuarioId, dataUtc);
+        var novoConteudo = NormalizarTextoOpcional(descricao);
+        if (Descricao == novoConteudo)
+        {
+            return null;
+        }
+
+        var historico = CriarHistorico(usuarioId, dataUtc, "AlterarDescricao",
+            novoConteudo is null
+                ? "Descrição removida da tarefa."
+                : "Descrição alterada.");
+        Descricao = novoConteudo;
         return historico;
     }
 
@@ -147,6 +179,51 @@ public sealed class Tarefa
         Prioridade = prioridade;
         return historico;
     }
+
+    public HistoricoTarefa? AlterarPrazo(DateTime? prazoUtc, Guid usuarioId, DateTime dataUtc)
+    {
+        if (prazoUtc.HasValue && prazoUtc.Value.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException("O prazo deve estar em UTC.", nameof(prazoUtc));
+        }
+
+        ValidarAutorEData(usuarioId, dataUtc);
+        if (PrazoUtc == prazoUtc)
+        {
+            return null;
+        }
+
+        var historico = CriarHistorico(usuarioId, dataUtc, "AlterarPrazo",
+            prazoUtc is null
+                ? "Prazo removido da tarefa."
+                : "Prazo alterado.");
+        PrazoUtc = prazoUtc;
+        return historico;
+    }
+
+    public HistoricoTarefa? AlterarResponsavel(Guid? responsavelId, Guid usuarioId, DateTime dataUtc)
+    {
+        if (responsavelId.HasValue && responsavelId.Value == Guid.Empty)
+        {
+            throw new ArgumentException("O identificador do responsável não pode ser vazio.", nameof(responsavelId));
+        }
+
+        ValidarAutorEData(usuarioId, dataUtc);
+        if (ResponsavelId == responsavelId)
+        {
+            return null;
+        }
+
+        var historico = CriarHistorico(usuarioId, dataUtc, "AlterarResponsavel",
+            responsavelId is null
+                ? "Responsável removido da tarefa."
+                : "Responsável alterado.");
+        ResponsavelId = responsavelId;
+        return historico;
+    }
+
+    private static string? NormalizarTextoOpcional(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 
     private static void ValidarAutorEData(Guid usuarioId, DateTime dataUtc)
     {

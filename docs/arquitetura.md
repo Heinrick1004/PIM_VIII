@@ -61,14 +61,16 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 - US01–US05 foram revisadas ao fechar a Sprint 1; critérios, testes e a pendência de demonstração manual estão registrados no [backlog](backlog.md) e [diário](diario-desenvolvimento.md).
 - O bootstrap do primeiro administrador é comando local `--bootstrap-admin`, somente em Development e somente para `TaskFlowDev`; pede senha sem eco, é idempotente e nunca roda no startup.
 - Atualização de usuário usa transação serializável para preservar o último administrador. Não existe endpoint de remoção.
-- Concorrência otimista com `rowversion` de oito bytes está mapeada e testada em SQL Server; a resposta de tarefa expõe o token para uso posterior, mas edição e conflito HTTP de tarefa ainda não estão implementados.
-- Persistir alterações relevantes de tarefa e histórico na mesma transação. O mecanismo de auditoria será definido antes da implementação SQL complementar, evitando duplicar registros entre aplicação e trigger.
+- `PATCH /api/tasks/{id}/status` aceita somente status e RowVersion Base64; o administrador pode alterar qualquer tarefa, enquanto o funcionário deve ser o responsável atual (ser apenas criador não autoriza a alteração).
+- `PUT /api/tasks/{id}` é exclusivo de administrador e aceita campos parciais de título, descrição, prioridade, prazo e responsável. Descrição, prazo e responsável podem ser removidos com `null`; o endpoint rejeita `status`, que é exclusivo do PATCH.
+- O RowVersion recebido é validado como exatamente oito bytes, comparado ao token lido e aplicado novamente à entidade como token original antes do `UpdateAsync`. O mapeamento do backing field `_rowVersion` continua associado à coluna SQL `Versao`; a cláusula de concorrência do EF Core usa o token original no `UPDATE`. `DbUpdateConcurrencyException` retorna 409, preservando a gravação concorrente.
+- Cada evento de alteração efetiva registra ação, usuário autenticado, tarefa e data UTC; alterações compostas e seus eventos são salvos no mesmo `IUnitOfWork` transacional. Operações sem mudança não alteram RowVersion nem geram evento; descrições de auditoria não copiam texto livre nem IDs de responsável. A aplicação é a única origem do histórico, sem triggers duplicadores.
 - EF Core migrations são a única fonte oficial do schema. `database/scripts/001_schema.sql` é referência técnica do Dia 1 e não foi executado.
 - Carregar configuração não sensível por `appsettings`; connection strings e chave de assinatura vêm de configuração externa/User Secrets, sem valores reais no repositório.
 - Expor Swagger apenas em desenvolvimento. A implantação futura deverá configurar HTTPS, observabilidade mínima e verificações de disponibilidade conforme as dependências reais.
 
 ## Evolução prevista
 
-As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4, 5 e 6 não alteraram schema nem executaram migration; criação/histórico, paginação, listagem e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
+As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4 a 7 não alteraram schema nem executaram migration; criação/histórico, paginação, listagem, edição, concorrência e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
 
 Docker, Kubernetes, CI/CD e clientes web/mobile/desktop pertencem às próximas sprints; os diretórios reservados não representam infraestrutura implantada. Resultados medidos estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).

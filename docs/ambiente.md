@@ -1,4 +1,26 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 6
+# Diagnóstico do ambiente e validação — Dias 1 a 7
+
+## Situação verificada no Dia 7 — 11/11/2026
+
+| Verificação | Resultado |
+| --- | --- |
+| Branch e sincronização inicial | `main`; `HEAD` e `origin/main` estavam no commit-base `fff205403d37f72f2ac93d869ae100e3a31e72b6`. `git fetch origin main` confirmou que não havia commits remotos novos; as alterações locais preexistentes foram preservadas. |
+| Baseline antes dos novos testes | Suíte completa: 76 aprovados, 0 reprovados, 0 ignorados. |
+| Restore / build | `dotnet restore TaskFlow.sln`: sucesso. `dotnet build TaskFlow.sln`: sucesso, 0 avisos e 0 erros. |
+| Suíte completa | `dotnet test TaskFlow.sln`: **90 aprovados, 0 reprovados, 0 ignorados**. Foram adicionados 14 casos: 12 HTTP/SQL Server e 2 domínio. |
+| Domínio | `Category=Domain`: 27 aprovados, 0 reprovados, 0 ignorados. |
+| HTTP | `Category=Http`: 49 aprovados, 0 reprovados, 0 ignorados. |
+| SQL Server | `Category=SqlServer`: 55 aprovados, 0 reprovados, 0 ignorados; testes reais usam bancos temporários `TaskFlowIntegrationTests_<GUID>`. |
+| Segurança | `Category=Security`: 2 aprovados, 0 reprovados, 0 ignorados. |
+| Sobreposição | Testes de endpoints estão nas categorias HTTP e SQL Server; os contadores filtrados não devem ser somados. |
+| Concorrência HTTP real | O teste força outra escrita via `DbContext` independente entre a leitura e o update HTTP. SQL Server incrementa RowVersion; EF dispara `DbUpdateConcurrencyException`; resposta HTTP é 409, a primeira escrita fica persistida e nenhum histórico da requisição vencida é gravado. |
+| Rollback do histórico | Teste injeta exceção após salvar um evento de uma edição com múltiplos campos; outro `DbContext` confirma dados e RowVersion originais e nenhum evento persistido. |
+| Permissões/reatribuição | Testes comprovam 401 anônimo, 403 para criador isolado/funcionário sem responsabilidade e edição administrativa, novo responsável apto a consultar/alterar status, antigo responsável bloqueado, criador ainda autorizado a consultar, remoção do responsável e autor identificado pelo JWT. |
+| Histórico/no-op | Atualizações efetivas registram ações; status repetido com versão corrente e edição administrativa idêntica não geram eventos extras nem novo RowVersion. |
+| Schema e `TaskFlowDev` | Nenhuma migration criada/aplicada; nenhum teste se conectou ao banco de desenvolvimento. `TaskFlowDev` foi preservado; demonstração manual segue pendente. |
+| Revisão local | `git diff --check` passou; scan dos acréscimos não encontrou padrões de chave privada, JWT, GitHub token ou AWS access key. PDFs/artefatos locais não relacionados permaneceram intocados. |
+
+US07 atende aos critérios de atualização, concorrência, permissões e histórico conforme os testes de integração; a Sprint 2 continua aberta para US08–US09.
 
 ## Situação verificada no Dia 6 — 10/11/2026
 

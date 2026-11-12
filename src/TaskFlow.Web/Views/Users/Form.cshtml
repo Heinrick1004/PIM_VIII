@@ -6,7 +6,7 @@
 <div class="breadcrumbs"><a asp-action="Index">Usuários</a><span aria-hidden="true">/</span><span>@(editing ? "Editar" : "Novo")</span></div>
 <div class="page-heading"><p class="eyebrow">ADMINISTRAÇÃO</p><h1>@(editing ? "Editar usuário" : "Cadastrar usuário")</h1><p class="page-subtitle">@(editing ? "Atualize nome, e-mail ou perfil. A senha atual não será exibida." : "Crie um acesso para um funcionário ou administrador.")</p></div>
 <section class="panel form-panel">
-    <form asp-controller="Users" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack">
+    <form asp-controller="Users" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack" data-loading-form>
         <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
         <div class="field">
             <label asp-for="Name">Nome <span class="required-mark">*</span></label>
@@ -37,7 +37,10 @@
         </div>
         <div class="form-actions">
             <a class="button button-quiet" asp-action="Index">Cancelar</a>
-            <button class="button button-primary" type="submit">@(editing ? "Salvar usuário" : "Cadastrar usuário")</button>
+            <button class="button button-primary" type="submit" data-loading-button>
+                <span data-button-label>@(editing ? "Salvar usuário" : "Cadastrar usuário")</span>
+                <span class="loading-spinner" aria-hidden="true" hidden></span>
+            </button>
         </div>
     </form>
 </section>

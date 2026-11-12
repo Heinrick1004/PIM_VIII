@@ -20,13 +20,14 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 8
+## Estado executado até o Dia 9
 
 - **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.
 - **US06 concluída no Dia 6:** lista protegida com visibilidade por criador/responsável, filtros AND, contagem/paginação SQL, ordenação estável e testes HTTP/SQL Server isolados.
 - **US07 concluída no Dia 7:** alteração de status por administrador/responsável atual, edição administrativa parcial, reatribuição e remoção, RowVersion aplicado como token original EF e validado sob corrida real no SQL Server, eventos transacionais e rollback em falha de histórico.
 - **US08 em andamento no Dia 8:** interface MVC implementada com autenticação por cookie, painel, tarefas, histórico e usuários, consumindo a API por cliente HTTP tipado. Os 23 testes Web e a suíte completa (113 testes) passaram; oito rotas foram inspecionadas visualmente em cinco larguras (360–1366 px), sem overflow horizontal. Resta a demonstração com conta real; a API de pré-visualização não usou `TaskFlowDev`.
+- **Redesign Dia 9 implementado:** tema escuro com variáveis CSS aplicado ao login, painel, filtros/lista de tarefas, criação/edição, detalhes/histórico e administração de usuários. Microinterações leves incluem hover/foco, cards, carregamento de formulários, menu móvel e feedback; movimento reduzido e foco de teclado são respeitados. O browser conferiu as rotas principais em 360, 390, 768, 1024, 1366 e 1920 px, sem overflow horizontal, usando uma API efêmera em memória. A demonstração de conta real permanece pendente.
 - **Parciais ou planejadas:** US09–US13 e as demais integrações continuam pendentes.
 
 ### Revisão provisória da US08 — Dia 8
@@ -38,6 +39,18 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | Permissões, conflito e erro real | A interface não permite ações administrativas a funcionários, apresenta falhas da API e trata 409 sem declarar sucesso; testes Web cobrem esses casos. Permissões definitivas continuam no servidor API. |
 | Responsividade e inspeção visual | As oito rotas principais foram conferidas em navegador nos viewports 360, 390, 768, 1024 e 1366 px com API de pré-visualização; nenhuma apresentou overflow horizontal. Um problema inicial em 768 px foi corrigido ampliando o breakpoint móvel. |
 | Conclusão da história | **Em andamento.** Suite completa (113 aprovados) passou; resta demonstração manual com conta configurada pelo mantenedor. API de pré-visualização não usa `TaskFlowDev` nem comprova autenticação real. |
+
+### Revisão do redesign e da revalidação — Dia 9
+
+| Critério | Evidência verificada / pendência |
+| --- | --- |
+| Tema escuro consistente | Paleta CSS reutilizável aplicada às views de login, painel, tarefas, formulário, detalhe/histórico e usuários; inputs, selects, opções, painéis e erros usam superfícies escuras. |
+| Interações e acessibilidade | Hover/foco animados, cards com entrada/elevação, loading de submissão, menu lateral com Escape/foco e alertas; CSS reduz animação para `prefers-reduced-motion`. |
+| Layout responsivo | Browser executou login e oito rotas autenticadas nas larguras 360, 390, 768, 1024, 1366 e 1920 px; todas responderam 200 e não apresentaram overflow horizontal. API usada nesse preview foi temporária e não persistente. |
+| Perfil revalidado | Testes Web cobrem administrador autorizado, rebaixamento e bloqueio imediato de GET/POST administrativo, API indisponível sem uso do perfil antigo, JWT 401 com expiração do cookie, remoção de duplicatas e uma única chamada direta a `GET /api/auth/me`. |
+| Erros e compatibilidade | Testes verificam renderização de `UsersController` via `Views/Shared/ApiError.cshtml`; antiforgery, RowVersion, conflito 409 e cliente HTTP continuam sob a suíte Web/integração. |
+| Uiverse e atribuição | As páginas atuais de Uiverse consultadas serviram conteúdo promocional, sem página/autoria/licença de componente identificável. Nenhum snippet de terceiro foi copiado; essa limitação está em [creditos-interface.md](creditos-interface.md). |
+| Demonstração com API real | **Pendente.** Não foram fornecidas credenciais escolhidas pelo mantenedor; o preview local usa dados fictícios apenas em memória. `TaskFlowDev` não foi acessado, alterado ou usado em testes. |
 
 ### Revisão da US06 — Dia 6
 

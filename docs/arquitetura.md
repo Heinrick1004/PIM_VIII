@@ -51,6 +51,10 @@ O cliente envia o JWT no cabeçalho Bearer; a API valida identidade e policy ant
 
 `TaskFlow.Web` mantém o JWT somente no ticket de autenticação protegido pelo ASP.NET Core Data Protection. O navegador recebe cookie de autenticação `HttpOnly`; chamadas Bearer para a API ocorrem servidor-servidor por `HttpClient` tipado. O cookie é `Secure` em produção, com expiração limitada à expiração do token; em Development usa HTTP local. A aplicação rejeita `Api:BaseUrl` em HTTP fora de Development para não enviar Bearer em texto claro. Formulários POST usam antiforgery e perfis administrativos são conferidos na interface, sem substituir a autorização e revalidação de perfil da API.
 
+Em cada requisição autenticada, `TaskFlowClaimsTransformation` consulta `GET /api/auth/me` e reconstrói os claims gerenciados (ID, nome, e-mail, perfil e token), removendo cópias anteriores. Se a API falhar ou não retornar um usuário, a identidade retornada não carrega autorização administrativa; em 401 a transformação também encerra o cookie protegido. A validação acontece antes das políticas MVC, evita chamadas ao próprio middleware/rotas MVC e não substitui a autorização da API, que também carrega o perfil corrente do banco. A sessão guarda o token protegido no servidor; não há token em HTML ou JavaScript.
+
+O CSS local compartilha variáveis de tema escuro em `src/TaskFlow.Web/wwwroot/css/site.css`; as interações são CSS/JavaScript nativos, sem dependência de UI. A implementação respeita `prefers-reduced-motion` e mantém navegação móvel com suporte a teclado.
+
 ## Decisões de implementação
 
 - Usar tipos `Guid` para identificadores, enums explícitos e datas UTC. O modelo SQL é detalhado em [modelo de dados](modelo-dados.md).

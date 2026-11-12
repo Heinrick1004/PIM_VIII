@@ -16,7 +16,7 @@
     <div class="alert alert-error" role="alert"><span>@Model.Error</span><a asp-action="Index">Tentar novamente</a></div>
 }
 <section class="panel filter-panel" aria-label="Filtros de tarefas">
-    <form method="get" asp-action="Index" class="filter-grid">
+    <form method="get" asp-action="Index" class="filter-grid" data-loading-form>
         <div class="field filter-search">
             <label for="titulo">Buscar tarefa</label>
             <input id="titulo" name="titulo" value="@Model.Title" maxlength="200" placeholder="Digite um título" />
@@ -48,7 +48,13 @@
             <label class="checkbox-field"><input type="checkbox" name="semResponsavel" value="true" checked="@Model.WithoutResponsible" /> Sem responsável</label>
         }
         <input type="hidden" name="pageSize" value="@Model.PageSize" />
-        <div class="filter-actions"><button class="button button-primary" type="submit">Filtrar</button><a class="button button-quiet" asp-action="Index">Limpar</a></div>
+        <div class="filter-actions">
+            <button class="button button-primary" type="submit" data-loading-button>
+                <span data-button-label>Filtrar</span>
+                <span class="loading-spinner" aria-hidden="true" hidden></span>
+            </button>
+            <a class="button button-quiet" asp-action="Index">Limpar</a>
+        </div>
     </form>
 </section>
 <section class="panel list-panel">
@@ -75,7 +81,7 @@
                         <td data-label="Tarefa"><a class="task-title-link" asp-action="Details" asp-route-id="@task.Id">@task.Titulo</a><small class="mobile-task-meta">Criada em @task.CriadaEmUtc.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
                         <td data-label="Status"><span class="status-badge status-@task.Status.ToString().ToLowerInvariant()">@EnumLabels.Status(task.Status)</span></td>
                         <td data-label="Prioridade"><span class="priority-label priority-@task.Prioridade.ToString().ToLowerInvariant()">@EnumLabels.Priority(task.Prioridade)</span></td>
-                        <td>@(task.ResponsavelId.HasValue
+                        <td data-label="Responsável">@(task.ResponsavelId.HasValue
                             ? (Model.UserNames.TryGetValue(task.ResponsavelId.Value, out var responsibleName)
                                 ? responsibleName
                                 : (task.ResponsavelId == Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value) ? "Você" : "Funcionário responsável"))

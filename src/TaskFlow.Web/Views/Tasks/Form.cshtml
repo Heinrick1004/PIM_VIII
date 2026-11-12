@@ -6,7 +6,7 @@
 <div class="breadcrumbs"><a asp-action="Index">Tarefas</a><span aria-hidden="true">/</span><span>@(editing ? "Editar" : "Nova")</span></div>
 <div class="page-heading"><p class="eyebrow">ADMINISTRAÇÃO</p><h1>@(editing ? "Editar tarefa" : "Criar tarefa")</h1><p class="page-subtitle">@(editing ? "Atualize os campos administrativos da tarefa." : "Preencha os dados para organizar uma nova demanda.")</p></div>
 <section class="panel form-panel">
-    <form asp-controller="Tasks" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack">
+    <form asp-controller="Tasks" asp-action="@(editing ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post" class="form-stack" data-loading-form>
         <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
         @if (editing)
         {
@@ -53,7 +53,10 @@
         </div>
         <div class="form-actions">
             <a class="button button-quiet" asp-action="@(editing ? "Details" : "Index")" asp-route-id="@Model.Id">Cancelar</a>
-            <button class="button button-primary" type="submit">@(editing ? "Salvar alterações" : "Criar tarefa")</button>
+            <button class="button button-primary" type="submit" data-loading-button>
+                <span data-button-label>@(editing ? "Salvar alterações" : "Criar tarefa")</span>
+                <span class="loading-spinner" aria-hidden="true" hidden></span>
+            </button>
         </div>
     </form>
 </section>

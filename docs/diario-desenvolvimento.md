@@ -249,7 +249,7 @@ HTTP e SQL Server se sobrepõem nos testes integrados; os totais por categoria n
 
 ### Sprint 2
 
-US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aberta: interface web (US08) implementada no Dia 8, mas ainda em validação; objetos SQL (US09) continuam pendentes.
+US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aberta: US08 foi implementada no Dia 8 e recebeu redesign visual e revalidação no Dia 9, mas aguarda demonstração com conta real; objetos SQL (US09) continuam pendentes.
 
 ## Dia 8 — 16/11/2026: interface ASP.NET Core MVC
 
@@ -274,3 +274,30 @@ US06 e US07 estão concluídas com critérios verificados. A Sprint 2 segue aber
 | `TaskFlowDev`, migrations e credenciais | Banco não acessado ou alterado; nenhuma migration criada/aplicada; nenhum usuário ou credencial padrão criado. Bootstrap e demonstração manual permanecem pendentes. |
 
 US08 permanece em andamento até a demonstração manual com conta configurada pelo mantenedor. O preview de interface utilizou API simulada local e não representa login real ou dados de `TaskFlowDev`. A Sprint 2 continua aberta; Dia 8 não altera a pendência de US09 (objetos SQL).
+
+## Dia 9 — 12/11/2026: redesign visual dark e revalidação de perfil
+
+### Implementação
+
+- Organizada a paleta em variáveis CSS e aplicado fundo `#0B1020`, superfície `#111827`, cards `#141C2F`, elevado `#1C2740`, borda `#273149`, azul `#6478FF`, roxo `#A78BFA` e texto `#F3F6FF`/`#A4B1CB` em login, painel, tarefas, formulários, detalhe/histórico, usuários e estados de erro.
+- Refinados hierarquia, espaçamento, contraste, responsividade, superfícies de dropdown e formulários. Textos dos botões azuis receberam cor escura para manter contraste com a paleta.
+- Implementadas microinterações CSS/JavaScript nativos: hover/glow de botões, foco animado em campos, cards do painel, loading em submissões, menu lateral com transição/overlay/teclado e alertas de sucesso/erro. `prefers-reduced-motion` reduz duração e repetição.
+- `TaskFlowClaimsTransformation` revalida o usuário na API em cada autenticação, substitui os claims gerenciados sem duplicação, falha fechada quando não obtém perfil e encerra o cookie em 401. A transformação usa cliente HTTP direto e não chama rotas MVC nem middleware de autenticação recursivamente.
+- Os créditos registram URLs e o estado atual do Uiverse: páginas consultadas serviram conteúdo promocional, sem componente individual/autoria/licença verificável; nenhum snippet externo foi copiado. A interface e as microinterações são implementação local.
+
+### Testes e evidências
+
+| Verificação | Resultado |
+| --- | --- |
+| Claims/autorização | Testes Web confirmam administrador com acesso, rebaixamento e bloqueio imediato de GET/POST administrativo, API 503 sem uso do perfil antigo, JWT 401 com expiração do cookie, claims gerenciados únicos e exatamente uma chamada de revalidação no teste direto. |
+| Erro MVC e compatibilidade | `UsersController` renderiza a view compartilhada para falha da API com HTTP 200. A suíte mantém casos de antiforgery, RowVersion, criação/edição/status e HTTP 409. |
+| Restore / build / testes | `dotnet restore TaskFlow.sln`: sucesso; `dotnet build TaskFlow.sln`: sucesso, 0 avisos/erros; `dotnet test TaskFlow.sln`: **119 aprovados, 0 reprovados, 0 ignorados**. Categoria Web: 29 aprovados. |
+| Inspeção visual | Browser local abriu login e oito rotas autenticadas; 54 combinações de rotas/larguras (360, 390, 768, 1024, 1366, 1920 px), HTTP 200 e sem overflow horizontal. Menu Escape/foco, estado loading, erro dark, movimento reduzido e screenshots de login/painel/erro foram conferidos. |
+| API e banco | Preview usou API efêmera em memória e dados de demonstração não persistentes. Nenhuma credencial real foi usada. `TaskFlowDev` não foi acessado nem alterado; testes SQL mantiveram isolamento em bancos temporários. |
+| Credenciais Uiverse | Foram verificadas `https://uiverse.io/`, `/buttons` e `/elements`; não foi possível verificar component pages, autores ou licenças individuais no catálogo servido durante a tarefa. Nenhum componente de terceiro foi copiado. |
+
+### Limitações e pendências
+
+- A integração da MVC com a API em execução e uma conta real não foi demonstrada por ausência de credenciais escolhidas pelo mantenedor. A API real, autenticação JWT, dados persistidos e `TaskFlowDev` não foram substituídos por dados de preview como evidência de produção.
+- O preview visual temporário foi encerrado após as medições; nenhum dado mock foi persistido.
+- US08 permanece em andamento até a demonstração real. US09 (objetos SQL) e as demais histórias planejadas não foram alteradas.

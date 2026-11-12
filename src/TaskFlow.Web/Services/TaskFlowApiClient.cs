@@ -21,6 +21,11 @@ public sealed class TaskFlowApiClient(HttpClient httpClient) : ITaskFlowApiClien
             null,
             cancellationToken);
 
+    public Task<ApiResult<PublicUser>> GetCurrentUserAsync(
+        string token,
+        CancellationToken cancellationToken) =>
+        SendAsync<PublicUser>(HttpMethod.Get, "/api/auth/me", null, token, cancellationToken);
+
     public Task<ApiResult<PagedTasks>> GetTasksAsync(
         string token,
         int page,

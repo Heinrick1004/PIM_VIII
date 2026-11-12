@@ -46,7 +46,7 @@
         {
             <div class="status-update">
                 <h2>Atualizar status</h2>
-                <form asp-action="ChangeStatus" asp-route-id="@task.Id" method="post" class="inline-form">
+                <form asp-action="ChangeStatus" asp-route-id="@task.Id" method="post" class="inline-form" data-loading-form>
                     <input type="hidden" name="rowVersion" value="@task.RowVersion" />
                     <label class="sr-only" for="status-change">Novo status</label>
                     <select id="status-change" name="status">
@@ -54,7 +54,10 @@
                         <option value="2" selected="@(task.Status == StatusTarefa.EmAndamento)">Em andamento</option>
                         <option value="3" selected="@(task.Status == StatusTarefa.Concluida)">Concluída</option>
                     </select>
-                    <button class="button button-primary" type="submit">Salvar status</button>
+                    <button class="button button-primary" type="submit" data-loading-button>
+                        <span data-button-label>Salvar status</span>
+                        <span class="loading-spinner" aria-hidden="true" hidden></span>
+                    </button>
                 </form>
             </div>
         }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
@@ -36,6 +37,36 @@ public sealed class WebApplicationTests
         using var script = await client.GetAsync("/js/login.js");
         Assert.Equal(HttpStatusCode.OK, css.StatusCode);
         Assert.Equal(HttpStatusCode.OK, script.StatusCode);
+        var stylesheet = await css.Content.ReadAsStringAsync();
+        Assert.Contains("--bg: #0b1020", stylesheet);
+        Assert.Contains("--surface-elevated: #1c2740", stylesheet);
+        Assert.Contains("--blue: #6478ff", stylesheet);
+        Assert.Contains("prefers-reduced-motion: reduce", stylesheet);
+    }
+
+    [Fact]
+    public async Task AdministrativeFormsAndTaskFiltersExposeRealLoadingStates()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(NoRedirects);
+        await LoginAsync(client, "admin@taskflow.test");
+
+        using var taskForm = await client.GetAsync("/Tasks/Create");
+        using var userForm = await client.GetAsync("/Users/Create");
+        using var filters = await client.GetAsync("/Tasks");
+        var taskHtml = await taskForm.Content.ReadAsStringAsync();
+        var userHtml = await userForm.Content.ReadAsStringAsync();
+        var filterHtml = await filters.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, taskForm.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, userForm.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, filters.StatusCode);
+        Assert.Contains("data-loading-form", taskHtml);
+        Assert.Contains("data-loading-button", taskHtml);
+        Assert.Contains("data-loading-form", userHtml);
+        Assert.Contains("data-loading-button", userHtml);
+        Assert.Contains("data-loading-form", filterHtml);
+        Assert.Contains("data-loading-button", filterHtml);
     }
 
     [Fact]
@@ -181,6 +212,20 @@ public sealed class WebApplicationTests
         Assert.Equal(HttpStatusCode.Redirect, createTask.StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, editTask.StatusCode);
         Assert.DoesNotContain("/Users", users.Headers.Location?.AbsolutePath ?? "");
+    }
+
+    [Fact]
+    public async Task AdministratorCanOpenUserManagementAfterProfileValidation()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(NoRedirects);
+        await LoginAsync(client, "admin@taskflow.test");
+
+        using var response = await client.GetAsync("/Users");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, factory.Api.CurrentUserCallCount);
+        Assert.Equal(1, factory.Api.UsersListCallCount);
     }
 
     [Fact]
@@ -365,20 +410,113 @@ public sealed class WebApplicationTests
     }
 
     [Fact]
+    public async Task DemotedAdmin_IsRejectedOnNextRequestEvenWhenCookieStillSaysAdmin()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(NoRedirects);
+        await LoginAsync(client, "admin@taskflow.test");
+        var antiforgery = await GetAntiforgeryTokenAsync(client, "/Users/Create");
+        factory.Api.CurrentUser = new PublicUser(
+            FakeTaskFlowApiClient.AdminId,
+            "Admin User",
+            "admin@taskflow.test",
+            PerfilUsuario.Funcionario);
+
+        using var response = await client.GetAsync("/Users");
+        using var createResponse = await client.PostAsync("/Users/Create", Form(
+            ("Name", "Blocked User"),
+            ("Email", "blocked@taskflow.test"),
+            ("Password", "strong-password-123"),
+            ("Profile", "2"),
+            ("__RequestVerificationToken", antiforgery)));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Account/AccessDenied", response.Headers.Location?.AbsolutePath);
+        Assert.Equal(HttpStatusCode.Redirect, createResponse.StatusCode);
+        Assert.Equal("/Account/AccessDenied", createResponse.Headers.Location?.AbsolutePath);
+        Assert.Equal(0, factory.Api.UserCreateCallCount);
+        Assert.Equal(0, factory.Api.UsersListCallCount);
+    }
+
+    [Fact]
+    public async Task ApiUnavailableDuringProfileValidationFailsClosedForAdminRoutes()
+    {
+        using var factory = new WebTestFactory();
+        using var client = factory.CreateClient(NoRedirects);
+        await LoginAsync(client, "admin@taskflow.test");
+        factory.Api.CurrentUserStatusCode = StatusCodes.Status503ServiceUnavailable;
+
+        using var response = await client.GetAsync("/Users");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Account/AccessDenied", LocationPath(response));
+        Assert.Equal(0, factory.Api.UsersListCallCount);
+    }
+
+    [Fact]
+    public async Task ClaimsTransformationReplacesManagedClaimsWithoutDuplicatesOrRecursiveCalls()
+    {
+        var api = new FakeTaskFlowApiClient();
+        var contextAccessor = new Microsoft.AspNetCore.Http.HttpContextAccessor();
+        var transformation = new TaskFlowClaimsTransformation(api, contextAccessor);
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "stale-id"),
+            new Claim(ClaimTypes.NameIdentifier, "duplicate-id"),
+            new Claim(ClaimTypes.Name, "Stale Admin"),
+            new Claim(ClaimTypes.Role, nameof(PerfilUsuario.Administrador)),
+            new Claim(ClaimTypes.Role, nameof(PerfilUsuario.Administrador)),
+            new Claim("taskflow_access_token", "test-token-secret"),
+            new Claim("taskflow_access_token", "duplicate-token"),
+            new Claim("custom", "kept")
+        ],
+        "Cookies");
+
+        var transformed = await transformation.TransformAsync(new ClaimsPrincipal(identity));
+
+        Assert.Single(transformed.FindAll(ClaimTypes.NameIdentifier));
+        Assert.Single(transformed.FindAll(ClaimTypes.Name));
+        Assert.Single(transformed.FindAll(ClaimTypes.Email));
+        Assert.Single(transformed.FindAll(ClaimTypes.Role));
+        Assert.Single(transformed.FindAll("taskflow_access_token"));
+        Assert.Equal("kept", transformed.FindFirst("custom")?.Value);
+        Assert.Equal("test-token-secret", transformed.FindFirst("taskflow_access_token")?.Value);
+        Assert.Equal(1, api.CurrentUserCallCount);
+    }
+
+    [Fact]
+    public async Task UsersControllerRendersSharedApiErrorInsteadOfHttp500()
+    {
+        using var factory = new WebTestFactory();
+        factory.Api.GetUserStatusCode = StatusCodes.Status503ServiceUnavailable;
+        using var client = factory.CreateClient(NoRedirects);
+        await LoginAsync(client, "admin@taskflow.test");
+
+        using var response = await client.GetAsync($"/Users/Edit/{FakeTaskFlowApiClient.EmployeeId}");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Não foi possível carregar o usuário.", PlainText(html));
+    }
+
+    [Fact]
     public async Task ExpiredApiSession_ClearsCookieAndRedirectsToLogin()
     {
         using var factory = new WebTestFactory();
         using var client = factory.CreateClient(NoRedirects);
         await LoginAsync(client, "admin@taskflow.test");
-        factory.Api.TaskListStatusCode = StatusCodes.Status401Unauthorized;
+        factory.Api.CurrentUserStatusCode = StatusCodes.Status401Unauthorized;
 
-        using var response = await client.GetAsync("/");
+        using var response = await client.GetAsync("/Users");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/Account/Login", LocationPath(response));
+        Assert.Equal("/Account/AccessDenied", LocationPath(response));
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), value =>
             value.StartsWith("TaskFlow.Web.Auth=", StringComparison.Ordinal)
             && value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+        using var nextResponse = await client.GetAsync("/Users");
+        Assert.Equal(HttpStatusCode.Redirect, nextResponse.StatusCode);
+        Assert.Equal("/Account/Login", LocationPath(nextResponse));
     }
 
     private static readonly WebApplicationFactoryClientOptions NoRedirects = new()
@@ -475,6 +613,13 @@ public sealed class WebApplicationTests
         public int TaskListStatusCode { get; set; } = StatusCodes.Status200OK;
         public int StatusUpdateCode { get; set; } = StatusCodes.Status200OK;
         public int UserCreateCode { get; set; } = StatusCodes.Status201Created;
+        public int CurrentUserStatusCode { get; set; } = StatusCodes.Status200OK;
+        public int GetUserStatusCode { get; set; } = StatusCodes.Status200OK;
+        public PublicUser CurrentUser { get; set; } = new(
+            AdminId,
+            "Admin User",
+            "admin@taskflow.test",
+            PerfilUsuario.Administrador);
         public string? LastAuthorizationToken { get; private set; }
         public string? LastCreateTaskRequest { get; private set; }
         public string? LastUpdateTaskRequest { get; private set; }
@@ -492,6 +637,9 @@ public sealed class WebApplicationTests
         public string? LastTaskTitle { get; private set; }
         public StatusTarefa LastRequestedStatus { get; private set; }
         public string? LastRequestedRowVersion { get; private set; }
+        public int CurrentUserCallCount { get; private set; }
+        public int UsersListCallCount { get; private set; }
+        public int UserCreateCallCount { get; private set; }
 
         public Task<ApiResult<LoginApiResponse>> LoginAsync(
             string email,
@@ -507,10 +655,23 @@ public sealed class WebApplicationTests
             var user = isAdmin
                 ? new PublicUser(AdminId, "Admin User", "admin@taskflow.test", PerfilUsuario.Administrador)
                 : new PublicUser(EmployeeId, "Employee User", "employee@taskflow.test", PerfilUsuario.Funcionario);
+            CurrentUser = user;
             return Task.FromResult(new ApiResult<LoginApiResponse>(
                 200,
                 new LoginApiResponse("test-token-secret", "Bearer", DateTimeOffset.UtcNow.AddMinutes(40), user),
                 null));
+        }
+
+        public Task<ApiResult<PublicUser>> GetCurrentUserAsync(string token, CancellationToken cancellationToken)
+        {
+            CurrentUserCallCount++;
+            LastAuthorizationToken = token;
+            return Task.FromResult(new ApiResult<PublicUser>(
+                CurrentUserStatusCode,
+                CurrentUserStatusCode == StatusCodes.Status200OK ? CurrentUser : null,
+                CurrentUserStatusCode == StatusCodes.Status503ServiceUnavailable
+                    ? "API indisponível."
+                    : null));
         }
 
         public Task<ApiResult<PagedTasks>> GetTasksAsync(
@@ -631,6 +792,7 @@ public sealed class WebApplicationTests
             int pageSize,
             CancellationToken cancellationToken)
         {
+            UsersListCallCount++;
             IReadOnlyList<PublicUser> users =
             [
                 new(AdminId, "Admin User", "admin@taskflow.test", PerfilUsuario.Administrador),
@@ -641,6 +803,14 @@ public sealed class WebApplicationTests
 
         public Task<ApiResult<PublicUser>> GetUserAsync(string token, Guid id, CancellationToken cancellationToken)
         {
+            if (GetUserStatusCode != StatusCodes.Status200OK)
+            {
+                return Task.FromResult(new ApiResult<PublicUser>(
+                    GetUserStatusCode,
+                    null,
+                    "Não foi possível carregar o usuário."));
+            }
+
             var user = id == EmployeeId
                 ? new PublicUser(EmployeeId, "Employee User", "employee@taskflow.test", PerfilUsuario.Funcionario)
                 : new PublicUser(AdminId, "Admin User", "admin@taskflow.test", PerfilUsuario.Administrador);
@@ -650,13 +820,17 @@ public sealed class WebApplicationTests
         public Task<ApiResult<PublicUser>> CreateUserAsync(
             string token,
             CreateUserApiRequest request,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken)
+        {
+            UserCreateCallCount++;
+            return
             Task.FromResult(new ApiResult<PublicUser>(
                 UserCreateCode,
                 UserCreateCode == StatusCodes.Status201Created
                     ? new PublicUser(Guid.NewGuid(), "New User", "new@taskflow.test", PerfilUsuario.Funcionario)
                     : null,
                 UserCreateCode == StatusCodes.Status409Conflict ? "E-mail já cadastrado." : null));
+        }
 
         public Task<ApiResult<PublicUser>> UpdateUserAsync(
             string token,

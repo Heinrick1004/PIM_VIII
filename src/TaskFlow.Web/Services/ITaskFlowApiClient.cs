@@ -6,6 +6,8 @@ public interface ITaskFlowApiClient
 {
     Task<ApiResult<LoginApiResponse>> LoginAsync(string email, string password, CancellationToken cancellationToken);
 
+    Task<ApiResult<PublicUser>> GetCurrentUserAsync(string token, CancellationToken cancellationToken);
+
     Task<ApiResult<PagedTasks>> GetTasksAsync(
         string token,
         int page,

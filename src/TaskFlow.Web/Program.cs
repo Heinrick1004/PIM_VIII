@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using TaskFlow.Web.Services;
@@ -15,6 +17,7 @@ public partial class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped<TaskFlowUserDirectory>();
+        builder.Services.AddScoped<IClaimsTransformation, TaskFlowClaimsTransformation>();
         var baseUrl = builder.Configuration["Api:BaseUrl"];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var apiAddress)
             || apiAddress.Scheme is not ("http" or "https")

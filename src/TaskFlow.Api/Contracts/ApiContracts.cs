@@ -88,3 +88,5 @@ public sealed record PagedTasksResponse(
     int Page,
     int PageSize,
     int TotalCount);
+
+public sealed record TaskSummaryResponse(int Total, int Pending, int InProgress, int Completed);

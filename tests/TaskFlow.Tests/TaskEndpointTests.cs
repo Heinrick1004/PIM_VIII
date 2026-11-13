@@ -34,6 +34,31 @@ public sealed class TaskEndpointTests
     }
 
     [Fact]
+    public async Task TaskSummary_ReturnsOnlyEmployeeVisibleTasksAndGlobalAdminCounts()
+    {
+        await _database.ResetAsync();
+        var admin = await SeedUserAsync("Admin", "admin@task.test", PerfilUsuario.Administrador);
+        var employee = await SeedUserAsync("Employee", "employee@task.test", PerfilUsuario.Funcionario);
+        var outsider = await SeedUserAsync("Outsider", "outsider@task.test", PerfilUsuario.Funcionario);
+        await SeedTaskAsync(employee.Id, "Created", StatusTarefa.Pendente);
+        await SeedTaskAsync(admin.Id, "Assigned", StatusTarefa.EmAndamento, employee.Id);
+        await SeedTaskAsync(outsider.Id, "Private", StatusTarefa.Concluida);
+
+        await using var factory = CreateFactory();
+        using var employeeClient = await LoginAsync(factory, employee.Email);
+        using var adminClient = await LoginAsync(factory, admin.Email);
+        using var anonymousClient = factory.CreateClient();
+        using var employeeResponse = await employeeClient.GetAsync("/api/tasks/summary");
+        using var adminResponse = await adminClient.GetAsync("/api/tasks/summary");
+        using var anonymousResponse = await anonymousClient.GetAsync("/api/tasks/summary");
+
+        Assert.Equal(HttpStatusCode.OK, employeeResponse.StatusCode);
+        Assert.Equal(new TaskSummaryResponse(2, 1, 1, 0), await employeeResponse.Content.ReadFromJsonAsync<TaskSummaryResponse>());
+        Assert.Equal(new TaskSummaryResponse(3, 1, 1, 1), await adminResponse.Content.ReadFromJsonAsync<TaskSummaryResponse>());
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Admin_CreatesTaskWithRealCreatorAssignmentHistoryAndRowVersion()
     {
         await _database.ResetAsync();
@@ -1100,6 +1125,9 @@ public sealed class TaskEndpointTests
 
         public Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
             _inner.GetByIdAsync(id, cancellationToken);
+
+        public Task<TaskSummary> GetSummaryAsync(Guid usuarioId, bool ehAdministrador, CancellationToken cancellationToken = default) =>
+            _inner.GetSummaryAsync(usuarioId, ehAdministrador, cancellationToken);
 
         public Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
             int page,

@@ -301,3 +301,13 @@ US08 permanece em andamento até a demonstração manual com conta configurada p
 - A integração da MVC com a API em execução e uma conta real não foi demonstrada por ausência de credenciais escolhidas pelo mantenedor. A API real, autenticação JWT, dados persistidos e `TaskFlowDev` não foram substituídos por dados de preview como evidência de produção.
 - O preview visual temporário foi encerrado após as medições; nenhum dado mock foi persistido.
 - US08 permanece em andamento até a demonstração real. US09 (objetos SQL) e as demais histórias planejadas não foram alteradas.
+
+
+## Dia 10 - estado de validacao
+
+Implementados no codigo os objetos SQL, migration, endpoint de resumo e consumo pelo Dashboard; adicionados testes dedicados a function, procedure, trigger e rollback. O ambiente Web de teste foi ajustado para evitar EventLog e chaves DPAPI do usuario e a categoria Web passou com 24 aprovados. SQL Server real validado no banco isolado TaskFlowIntegrationTests_<GUID>: suite completa 123/123 aprovada, incluindo testes de trigger, RowVersion, transacao e rollback. TaskFlowDev nao foi acessado.
+
+
+### Validacao apos UseSqlOutputClause(false)
+
+A configuracao foi aplicada ao mapeamento ToTable existente de Tarefa; a trigger foi mantida, assim como o RowVersion. Com a execucao de testes autorizada fora do sandbox, passaram SqlServerPersistenceTests (11), TaskEndpointTests (32), SqlServerProgrammabilityTests (2) e a suite completa: 123 aprovados, 0 reprovados, 0 ignorados. Foram usados somente bancos temporarios TaskFlowIntegrationTests_<GUID>; TaskFlowDev nao foi acessado.

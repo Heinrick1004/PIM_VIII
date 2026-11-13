@@ -28,7 +28,7 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 - **US07 concluída no Dia 7:** alteração de status por administrador/responsável atual, edição administrativa parcial, reatribuição e remoção, RowVersion aplicado como token original EF e validado sob corrida real no SQL Server, eventos transacionais e rollback em falha de histórico.
 - **US08 em andamento no Dia 8:** interface MVC implementada com autenticação por cookie, painel, tarefas, histórico e usuários, consumindo a API por cliente HTTP tipado. Os 23 testes Web e a suíte completa (113 testes) passaram; oito rotas foram inspecionadas visualmente em cinco larguras (360–1366 px), sem overflow horizontal. Resta a demonstração com conta real; a API de pré-visualização não usou `TaskFlowDev`.
 - **Redesign Dia 9 implementado:** tema escuro com variáveis CSS aplicado ao login, painel, filtros/lista de tarefas, criação/edição, detalhes/histórico e administração de usuários. Microinterações leves incluem hover/foco, cards, carregamento de formulários, menu móvel e feedback; movimento reduzido e foco de teclado são respeitados. O browser conferiu as rotas principais em 360, 390, 768, 1024, 1366 e 1920 px, sem overflow horizontal, usando uma API efêmera em memória. A demonstração de conta real permanece pendente.
-- **Parciais ou planejadas:** US09–US13 e as demais integrações continuam pendentes.
+- **Parciais ou planejadas:** US09 foi concluida; US10–US13 e as demais integrações continuam pendentes.
 
 ### Revisão provisória da US08 — Dia 8
 
@@ -110,3 +110,6 @@ Uma história estará pronta quando seus critérios forem demonstrados, o códig
 Em cada dia, revisar progresso, impedimentos e capacidade. Ao final de cada sprint, demonstrar o incremento e realizar uma retrospectiva curta. Se houver atraso, reduzir acabamento e abrangência das interfaces antes de comprometer segurança, integridade, verificação ou a veracidade das evidências; renegociar qualquer retirada de requisito com a equipe/orientação.
 
 Dependências principais: US02 sustenta US04–US07; US03 está implementada e precede a exposição dos próximos casos de negócio; US06 está concluída e US07 sustenta US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md) e as execuções verificadas no [diário](diario-desenvolvimento.md).
+
+
+US09 **Concluida**: migration, function, procedure, trigger, endpoint summary e Dashboard integrados. Evidencia final: 123/123 testes aprovados, incluindo testes SQL Server isolados, testes de RowVersion e rollback transacional.

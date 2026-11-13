@@ -3,10 +3,13 @@ using TaskFlow.Domain.Enums;
 
 namespace TaskFlow.Application.Contracts;
 
+public sealed record TaskSummary(int Total, int Pending, int InProgress, int Completed);
+
 public interface ITarefaRepository
 {
     Task AddAsync(Tarefa tarefa, CancellationToken cancellationToken = default);
     Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<TaskSummary> GetSummaryAsync(Guid usuarioId, bool ehAdministrador, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
         int page,
         int pageSize,

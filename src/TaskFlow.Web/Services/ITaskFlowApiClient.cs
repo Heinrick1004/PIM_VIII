@@ -4,6 +4,7 @@ namespace TaskFlow.Web.Services;
 
 public interface ITaskFlowApiClient
 {
+    Task<ApiResult<TaskSummary>> GetTaskSummaryAsync(string token, CancellationToken cancellationToken);
     Task<ApiResult<LoginApiResponse>> LoginAsync(string email, string password, CancellationToken cancellationToken);
 
     Task<ApiResult<PublicUser>> GetCurrentUserAsync(string token, CancellationToken cancellationToken);

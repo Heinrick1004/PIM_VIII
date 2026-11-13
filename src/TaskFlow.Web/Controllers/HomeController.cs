@@ -21,52 +21,34 @@ public sealed class HomeController(ITaskFlowApiClient apiClient) : Controller
             return await ExpireSessionAsync();
         }
 
-        var pendingTask = apiClient.GetTasksAsync(
-            token, 1, 1, StatusTarefa.Pendente, null, null, false, null, cancellationToken);
-        var activeTask = apiClient.GetTasksAsync(
-            token, 1, 1, StatusTarefa.EmAndamento, null, null, false, null, cancellationToken);
-        var completedTask = apiClient.GetTasksAsync(
-            token, 1, 1, StatusTarefa.Concluida, null, null, false, null, cancellationToken);
-        var recentTask = apiClient.GetTasksAsync(
-            token, 1, 5, null, null, null, false, null, cancellationToken);
-        await Task.WhenAll(pendingTask, activeTask, completedTask, recentTask);
-
-        var results = new[]
-        {
-            await pendingTask,
-            await activeTask,
-            await completedTask,
-            await recentTask
-        };
-        if (results.Any(result => result.StatusCode == StatusCodes.Status401Unauthorized))
+        var summaryTask = apiClient.GetTaskSummaryAsync(token, cancellationToken);
+        var recentTask = apiClient.GetTasksAsync(token, 1, 5, null, null, null, false, null, cancellationToken);
+        await Task.WhenAll(summaryTask, recentTask);
+        var summary = await summaryTask;
+        var recent = await recentTask;
+        if (summary.StatusCode == StatusCodes.Status401Unauthorized || recent.StatusCode == StatusCodes.Status401Unauthorized)
         {
             return await ExpireSessionAsync();
         }
 
-        var failed = results.FirstOrDefault(result => !result.Succeeded || result.Value is null);
-        if (failed is not null)
+        if (!summary.Succeeded || summary.Value is null || !recent.Succeeded || recent.Value is null)
         {
             return View(new DashboardViewModel
             {
                 Name = User.Identity?.Name ?? "",
                 Profile = User.FindFirstValue(ClaimTypes.Role) ?? "",
-                Error = failed.Message ?? "Não foi possível carregar o painel. Tente novamente."
+                Error = summary.Message ?? recent.Message ?? "Não foi possível carregar o painel."
             });
         }
-
-        var pending = results[0].Value!;
-        var active = results[1].Value!;
-        var completed = results[2].Value!;
-        var recent = results[3].Value!;
         return View(new DashboardViewModel
         {
             Name = User.Identity?.Name ?? "",
             Profile = User.FindFirstValue(ClaimTypes.Role) ?? "",
-            Pending = pending.TotalCount,
-            InProgress = active.TotalCount,
-            Completed = completed.TotalCount,
-            Total = pending.TotalCount + active.TotalCount + completed.TotalCount,
-            RecentTasks = recent.Items
+            Pending = summary.Value.Pending,
+            InProgress = summary.Value.InProgress,
+            Completed = summary.Value.Completed,
+            Total = summary.Value.Total,
+            RecentTasks = recent.Value.Items
         });
     }
 

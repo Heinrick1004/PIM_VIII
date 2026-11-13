@@ -150,4 +150,16 @@ dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Securi
 - [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
 - [Créditos e pesquisa de componentes de interface](docs/creditos-interface.md)
 
-Pendências próximas: executar manualmente o bootstrap com senha definida pelo mantenedor e demonstrar a integração da interface com a API em `TaskFlowDev`; concluir a validação com conta real antes de fechar US08. O redesign visual foi inspecionado com dados temporários em memória; isso não comprova login real nem dados persistidos. `TaskFlowDev` não foi usado. US07 foi concluída e publicada; US09 (objetos SQL), clientes Flutter/desktop, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+Pendências próximas: executar manualmente o bootstrap com senha definida pelo mantenedor e demonstrar a integração da interface com a API em `TaskFlowDev`; concluir a validação com conta real antes de fechar US08. O redesign visual foi inspecionado com dados temporários em memória; isso não comprova login real nem dados persistidos. `TaskFlowDev` não foi usado. US07 foi concluída e publicada; US09 (objetos SQL) foi concluida e validada; clientes Flutter/desktop, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+
+## US09 - programabilidade SQL Server e resumo do Dashboard
+
+`dbo.fn_TarefasVisiveis(@UsuarioId)` e uma inline TVF somente-leitura que retorna IDs de tarefas criadas pelo usuario ou atribuidas a ele. O valor GUID vazio nao retorna tarefas; o predicado `OR` evita duplicidade se a pessoa for criadora e responsavel.
+
+`dbo.usp_TarefasResumo(@UsuarioId,@EhAdministrador)` calcula no SQL Server o total, pendentes (status 1), em andamento (2) e concluidas (3). Administradores recebem o resumo global; funcionarios usam a function para limitar o conjunto visivel. A procedure retorna uma linha com zeros quando o conjunto e vazio.
+
+`dbo.TR_Tarefas_ProtegeDadosCriacao` compara `inserted` e `deleted` e rejeita mudanca real de `CriadorId` ou `CriadaEmUtc`, inclusive em updates de varias linhas. Updates normais continuam permitidos; a trigger nao cria historico e nao altera `Versao`.
+
+A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
+
+Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.

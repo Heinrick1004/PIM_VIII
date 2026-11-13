@@ -73,6 +73,27 @@ public sealed class TaskFlowApiClientTests
     }
 
     [Fact]
+    public async Task TaskSummaryAsync_UsesAuthenticatedSummaryEndpoint()
+    {
+        string? requestPath = null;
+        string? authorization = null;
+        using var httpClient = CreateClient(request =>
+        {
+            requestPath = request.RequestUri!.AbsolutePath;
+            authorization = request.Headers.Authorization?.ToString();
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, new TaskSummary(7, 2, 3, 2)));
+        });
+        var client = new TaskFlowApiClient(httpClient);
+
+        var result = await client.GetTaskSummaryAsync("dashboard-token", CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("/api/tasks/summary", requestPath);
+        Assert.Equal("Bearer dashboard-token", authorization);
+        Assert.Equal(new TaskSummary(7, 2, 3, 2), result.Value);
+    }
+
+    [Fact]
     public async Task StatusUpdateAsync_SendsPatchRowVersionAndReturnsConflictMessage()
     {
         HttpMethod? method = null;

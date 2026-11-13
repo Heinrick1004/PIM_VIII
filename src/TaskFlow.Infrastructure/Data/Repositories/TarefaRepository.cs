@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Application.Contracts;
 using TaskFlow.Domain.Entities;
@@ -22,6 +24,25 @@ public sealed class TarefaRepository : ITarefaRepository
 
     public async Task<Tarefa?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         await _context.Tarefas.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public async Task<TaskSummary> GetSummaryAsync(Guid usuarioId, bool ehAdministrador, CancellationToken cancellationToken = default)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var openedHere = connection.State != ConnectionState.Open;
+        if (openedHere) await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "dbo.usp_TarefasResumo";
+            command.CommandType = CommandType.StoredProcedure;
+            command.Parameters.Add(new SqlParameter("@UsuarioId", SqlDbType.UniqueIdentifier) { Value = usuarioId });
+            command.Parameters.Add(new SqlParameter("@EhAdministrador", SqlDbType.Bit) { Value = ehAdministrador });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("A procedure de resumo não retornou linha.");
+            return new TaskSummary(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+        }
+        finally { if (openedHere) await connection.CloseAsync(); }
+    }
 
     public async Task<(IReadOnlyList<Tarefa> Tasks, int TotalCount)> ListPageAsync(
         int page,

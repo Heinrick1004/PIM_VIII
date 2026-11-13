@@ -10,6 +10,9 @@ public sealed class TaskFlowApiClient(HttpClient httpClient) : ITaskFlowApiClien
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public Task<ApiResult<TaskSummary>> GetTaskSummaryAsync(string token, CancellationToken cancellationToken) =>
+        SendAsync<TaskSummary>(HttpMethod.Get, "/api/tasks/summary", null, token, cancellationToken);
+
     public Task<ApiResult<LoginApiResponse>> LoginAsync(
         string email,
         string password,

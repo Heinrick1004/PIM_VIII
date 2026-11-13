@@ -11,6 +11,7 @@ public sealed class TarefaConfiguration : IEntityTypeConfiguration<Tarefa>
     {
         builder.ToTable("Tarefas", table =>
         {
+            table.UseSqlOutputClause(false);
             table.HasCheckConstraint("CK_Tarefas_Id", "[Id] <> '00000000-0000-0000-0000-000000000000'");
             table.HasCheckConstraint("CK_Tarefas_Titulo", "LEN(LTRIM(RTRIM([Titulo]))) BETWEEN 1 AND 200");
             table.HasCheckConstraint("CK_Tarefas_Status", "[Status] IN (1, 2, 3)");

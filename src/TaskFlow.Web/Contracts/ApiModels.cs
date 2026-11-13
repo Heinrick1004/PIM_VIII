@@ -84,6 +84,8 @@ public sealed record PagedTasks(
     int PageSize,
     int TotalCount);
 
+public sealed record TaskSummary(int Total, int Pending, int InProgress, int Completed);
+
 public sealed record PublicTaskHistory(
     Guid Id,
     Guid TarefaId,

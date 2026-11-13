@@ -20,12 +20,28 @@ public static class TaskEndpoints
         group.MapPost("/", CreateAsync)
             .RequireAuthorization("Administrator");
         group.MapGet("/", ListAsync);
+        group.MapGet("/summary", SummaryAsync);
         group.MapGet("/{id:guid}", GetByIdAsync);
         group.MapGet("/{id:guid}/history", GetHistoryAsync);
         group.MapPatch("/{id:guid}/status", UpdateStatusAsync);
         group.MapPut("/{id:guid}", UpdateAsync)
             .RequireAuthorization("Administrator");
         return group;
+    }
+
+    private static async Task<IResult> SummaryAsync(
+        ClaimsPrincipal principal,
+        ITarefaRepository tasks,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+        {
+            return Results.Unauthorized();
+        }
+
+        var isAdministrator = principal.IsInRole(nameof(PerfilUsuario.Administrador));
+        var summary = await tasks.GetSummaryAsync(userId, isAdministrator, cancellationToken);
+        return Results.Ok(new TaskSummaryResponse(summary.Total, summary.Pending, summary.InProgress, summary.Completed));
     }
 
     private static async Task<IResult> CreateAsync(

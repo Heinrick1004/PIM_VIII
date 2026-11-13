@@ -83,3 +83,20 @@ O CSS local compartilha variáveis de tema escuro em `src/TaskFlow.Web/wwwroot/c
 As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4 a 7 não alteraram schema nem executaram migration; criação/histórico, paginação, listagem, edição, concorrência e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
 
 Docker, Kubernetes, CI/CD e clientes Flutter/desktop pertencem às próximas sprints; diretórios reservados não representam infraestrutura implantada. A interface Web foi implementada no Dia 8, mas a conclusão da US08 depende da validação final, inspeção das telas autenticadas e demonstração real. Resultados medidos estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).
+
+## US09 - programabilidade SQL Server e resumo do Dashboard
+
+`dbo.fn_TarefasVisiveis(@UsuarioId)` e uma inline TVF somente-leitura que retorna IDs de tarefas criadas pelo usuario ou atribuidas a ele. O valor GUID vazio nao retorna tarefas; o predicado `OR` evita duplicidade se a pessoa for criadora e responsavel.
+
+`dbo.usp_TarefasResumo(@UsuarioId,@EhAdministrador)` calcula no SQL Server o total, pendentes (status 1), em andamento (2) e concluidas (3). Administradores recebem o resumo global; funcionarios usam a function para limitar o conjunto visivel. A procedure retorna uma linha com zeros quando o conjunto e vazio.
+
+`dbo.TR_Tarefas_ProtegeDadosCriacao` compara `inserted` e `deleted` e rejeita mudanca real de `CriadorId` ou `CriadaEmUtc`, inclusive em updates de varias linhas. Updates normais continuam permitidos; a trigger nao cria historico e nao altera `Versao`.
+
+A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
+
+Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.
+
+
+### Compatibilidade da trigger com EF Core SQL Server
+
+O mapeamento existente de Tarefas chama UseSqlOutputClause(false) no TableBuilder porque a tabela possui trigger DML. A configuracao afeta somente a forma dos comandos gerados pelo provider; Versao continua configurada como rowversion e token de concorrencia. A trigger de imutabilidade permanece habilitada.

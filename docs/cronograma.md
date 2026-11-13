@@ -43,3 +43,6 @@ O incremento do Dia 8 foi implementado: aplicação ASP.NET Core MVC com login/l
 - A janela é curta para três clientes e infraestrutura. Revisar capacidade diariamente, reservar o último dia para correções e manter os clientes mínimos.
 
 O plano pode ser reordenado conforme impedimentos reais, preservando dependências, critérios de aceite e registro das decisões. Datas planejadas não devem ser reescritas como execução concluída sem evidências.
+
+
+- Dia 10 / US09: objetos SQL, migration, resumo da API e integracao Dashboard implementados em codigo. Estado Concluida apos testes reais: 123/123 aprovados, incluindo rollback da migration e transacao do historico.

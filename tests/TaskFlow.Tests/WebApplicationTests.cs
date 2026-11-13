@@ -4,11 +4,13 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using TaskFlow.Web.Contracts;
 using TaskFlow.Web.Services;
 
@@ -574,6 +576,11 @@ public sealed class WebApplicationTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(_environment);
+            builder.ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+            });
             if (_apiBaseUrl is not null)
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>
@@ -585,6 +592,7 @@ public sealed class WebApplicationTests
 
             builder.ConfigureServices(services =>
             {
+                services.AddDataProtection().UseEphemeralDataProtectionProvider();
                 services.RemoveAll<ITaskFlowApiClient>();
                 services.AddSingleton<ITaskFlowApiClient>(_api);
             });
@@ -593,6 +601,8 @@ public sealed class WebApplicationTests
 
     private sealed class FakeTaskFlowApiClient : ITaskFlowApiClient
     {
+        public Task<ApiResult<TaskSummary>> GetTaskSummaryAsync(string token, CancellationToken cancellationToken) =>
+            Task.FromResult(new ApiResult<TaskSummary>(200, new TaskSummary(16, 8, 3, 5), null));
         public static readonly Guid AdminId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         public static readonly Guid EmployeeId = Guid.Parse("20000000-0000-0000-0000-000000000002");
         public static readonly Guid TaskId = Guid.Parse("30000000-0000-0000-0000-000000000003");

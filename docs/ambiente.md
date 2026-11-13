@@ -213,3 +213,19 @@ As evidências locais ficam em `artifacts/test-results/day1.trx`, `artifacts/htt
 - Configurar persistência e migrations e validar constraints/rowversion em banco de desenvolvimento escolhido explicitamente.
 - Implementar hashing, autenticação e autorização antes dos endpoints de negócio.
 - Preparar Docker, Kubernetes e CI/CD nas sprints previstas; verificar toolchains mobile quando o cliente Flutter for iniciado.
+
+
+### Validacao incremental US09 (2026-11-13)
+
+Restore/build: resultados atuais devem ser relidos na execucao final. Categoria WebApplicationTests: 24 aprovados depois de configurar logging de console somente no host de teste e Data Protection efemero. A falha inicial real era DPAPI ao ler chaves pessoais persistidas por outro perfil Windows; as excecoes agora aparecem no console.
+
+Os dois testes SqlServerProgrammabilityTests foram tentados e falharam antes de criar o banco isolado: SqlServerTestDatabase recebeu erro SSPI (target principal incorreto). O servico MSSQLSERVER consta iniciado; tentativas em localhost, ., (local) e 127.0.0.1 nao conectaram e nao foi encontrada LocalDB. Nenhum teste SQL foi aprovado, migration e objetos nao foram aplicados; TaskFlowDev nao foi acessado. Retomar com connection string valida via TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING.
+
+
+### Tentativas iniciais no sandbox
+
+As tentativas dentro do sandbox nao conseguiam negociar TLS/SSPI e falharam antes de inicializar o fixture. Depois os mesmos testes foram executados com permissao ampliada e passaram integralmente, conforme o resultado abaixo.
+
+### Compatibilidade EF Core e trigger
+
+Configurado UseSqlOutputClause(false) no ToTable existente de Tarefa. Build aprovado. `SqlServerPersistenceTests`: 11/11; `TaskEndpointTests`: 32/32; `SqlServerProgrammabilityTests`: 2/2; suite completa: 123/123, zero falhas e zero ignorados. Os casos de concorrencia RowVersion, updates com trigger e rollback de historico passaram. A permissao ampliada permitiu ao cliente negociar TLS com o SQL Server. A fixture criou e removeu somente `TaskFlowIntegrationTests_<GUID>`; `TaskFlowDev` nao foi acessado.

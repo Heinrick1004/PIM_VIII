@@ -101,3 +101,15 @@ Resultado final no Dia 5: 74 aprovados, 0 reprovados e 0 ignorados; 41 testes fi
 | `005_transacoes.sql` | Demonstração de atualização de tarefa e inclusão de histórico com commit/rollback. | Falha intermediária deve reverter ambas as alterações; incluir teste de conflito de versão. |
 
 Esses nomes representam o planejamento, não arquivos já presentes. Os artefatos só serão escritos após definir sua integração com a estratégia oficial e a rastreabilidade à disciplina de Programação de Banco de Dados.
+
+## US09 - programabilidade SQL Server e resumo do Dashboard
+
+`dbo.fn_TarefasVisiveis(@UsuarioId)` e uma inline TVF somente-leitura que retorna IDs de tarefas criadas pelo usuario ou atribuidas a ele. O valor GUID vazio nao retorna tarefas; o predicado `OR` evita duplicidade se a pessoa for criadora e responsavel.
+
+`dbo.usp_TarefasResumo(@UsuarioId,@EhAdministrador)` calcula no SQL Server o total, pendentes (status 1), em andamento (2) e concluidas (3). Administradores recebem o resumo global; funcionarios usam a function para limitar o conjunto visivel. A procedure retorna uma linha com zeros quando o conjunto e vazio.
+
+`dbo.TR_Tarefas_ProtegeDadosCriacao` compara `inserted` e `deleted` e rejeita mudanca real de `CriadorId` ou `CriadaEmUtc`, inclusive em updates de varias linhas. Updates normais continuam permitidos; a trigger nao cria historico e nao altera `Versao`.
+
+A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
+
+Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.

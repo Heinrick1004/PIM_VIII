@@ -1,99 +1,42 @@
-# Validacao manual com a API real
+# TaskFlow Mobile — integração com a API
 
-Este roteiro usa apenas uma base SQL Server descartavel. Nunca configure a API
-ou os comandos abaixo para usar `TaskFlowDev`.
+Este documento descreve a configuração e as evidências da revisão complementar de 16/11/2026. As consultas SQL desta revisão usaram exclusivamente `TaskFlowDemo`; não foi usado `TaskFlowDev`, não foram criados bancos temporários e nenhum registro de tarefa/histórico foi alterado ou removido. O login de demonstração passou pelo fluxo normal; esse fluxo pode atualizar o hash se detectar senha legada que precise de rehash.
 
-## Preparar o banco e a API
+## Banco e inicialização da API
 
-1. Use uma instancia SQL Server de testes e crie um catalogo dedicado, por
-   exemplo `TaskFlowMobileIntegrationTests`. Confirme o nome antes de qualquer
-   comando que remova o banco.
-2. Abra um PowerShell normal e defina a connection string somente na sessao:
+A API não cria nem aplica migrations no startup. O schema de `TaskFlowDemo` já existe e tem quatro migrations registradas. Se for necessário preparar o banco em outro ambiente, confirme primeiro a connection string e o destino; `dotnet ef database update` aplica migrations ao catálogo configurado e pode criar/alterar schema. Não rode esse comando como parte de uma validação somente de leitura.
 
-   ```powershell
-   $env:ConnectionStrings__TaskFlow = 'Server=localhost;Database=TaskFlowMobileIntegrationTests;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=True'
-   $env:Authentication__Jwt__Issuer = 'TaskFlow.Mobile.Tests'
-   $env:Authentication__Jwt__Audience = 'TaskFlow.Mobile.Tests'
-   $jwtBytes = New-Object byte[] 32
-   [System.Security.Cryptography.RandomNumberGenerator]::Fill($jwtBytes)
-   $env:Authentication__Jwt__SigningKey = [Convert]::ToBase64String($jwtBytes)
-   [Array]::Clear($jwtBytes, 0, $jwtBytes.Length)
-   ```
+Para uma conta de demonstração, o seeder só roda em `Development` quando `DemoAdmin:Enabled=true`, a conexão está disponível e o catálogo é exatamente `TaskFlowDemo`. `DemoAdmin:Name`, `DemoAdmin:Email` e `DemoAdmin:Password` devem vir de variáveis de ambiente ou User Secrets locais. Administrador existente não é sobrescrito; e-mail ocupado por conta não administrativa faz o startup falhar sem promovê-la. A API não migra o schema automaticamente. `--bootstrap-admin` é um comando distinto, restrito a `TaskFlowDev`; não o use neste banco.
 
-   A connection string precisa apontar para o catalogo isolado. Nao coloque
-   senha, token ou chave JWT no codigo ou no repositorio.
-3. Aplique as migrations com `dotnet ef database update`, usando
-   `src/TaskFlow.Infrastructure` como projeto e `src/TaskFlow.Api` como projeto
-   de inicializacao. A API nao aplica migrations automaticamente. Execute o
-   comando a partir da raiz do repositorio:
+## Conexão do emulador
 
-   ```powershell
-   dotnet ef database update --project src/TaskFlow.Infrastructure --startup-project src/TaskFlow.Api --context TaskFlowDbContext
-   ```
-
-4. Crie nesse banco isolado um administrador de teste, um funcionario e uma
-   tarefa atribuida ao funcionario. A API nao oferece cadastro anonimo e
-   `--bootstrap-admin` e restrito deliberadamente ao banco `TaskFlowDev`. Para
-   semear o banco de teste, use `PasswordHasher<Usuario>` e o `TaskFlowDbContext`,
-   seguindo os helpers `SeedUserAsync` de
-   `tests/TaskFlow.Tests/AuthenticationEndpointTests.cs` e
-   `tests/TaskFlow.Tests/TaskEndpointTests.cs`. Guarde a senha descartavel fora
-   do repositorio e nao insira senha em texto puro.
-5. Na mesma sessao PowerShell, inicie a API na interface de rede:
-
-   ```powershell
-   dotnet run --project src/TaskFlow.Api --urls http://0.0.0.0:5046
-   ```
-
-## Validar o app
-
-Em outro PowerShell, a partir de `mobile`:
+O AVD pode acessar o host por `10.0.2.2:5046` quando sua rede virtual estiver ativa. Se não estiver, encaminhe a porta com o AVD conectado:
 
 ```powershell
-flutter pub get
-flutter analyze
-flutter test
-flutter run --dart-define=TASKFLOW_API_BASE_URL=http://10.0.2.2:5046
+adb reverse tcp:5046 tcp:5046
+flutter run --dart-define=TASKFLOW_API_BASE_URL=http://127.0.0.1:5046
 ```
 
-Para aparelho fisico, substitua `10.0.2.2` pelo IP LAN do computador host.
-Entre com o funcionario de teste e confirme:
+Não use dispositivo físico nesta validação. O APK de depuração pode ser instalado com `adb install -r build/app/outputs/flutter-apk/app-debug.apk` depois que o AVD estiver online.
 
-1. Login aceito e perfil carregado por `/api/auth/me`.
-2. Lista da tarefa atribuida.
-3. Detalhe e historico da tarefa.
-4. Atualizacao de status e novo evento no historico.
-5. Concorrencia: abra a mesma tarefa em duas sessoes antes de qualquer
-   atualizacao; salve uma sessao e depois tente salvar a versao carregada pela
-   outra. A segunda operacao deve receber HTTP 409, e o app deve recarregar o
-   detalhe e o historico.
-6. Logout e novo login.
+## Validações executadas nesta revisão
 
-Ao terminar, encerre a API e remova somente o catalogo temporario criado acima,
-depois de confirmar o nome do banco. Preserve `TaskFlowDev`.
+- Flutter 3.47.9 / Dart 3.13.7: `flutter pub get` passou sem atualizar versões travadas.
+- `dart format --output=none --set-exit-if-changed lib test`: 11 arquivos verificados, nenhum alterado.
+- `flutter analyze`: sem problemas.
+- `flutter test`: 3/3 passaram.
+- `flutter build apk --debug`: passou; APK em `build/app/outputs/flutter-apk/app-debug.apk`.
+- API em `http://127.0.0.1:5046`: health 200; login demo emitiu JWT; `/api/auth/me`, lista de tarefas (2) e `/api/tasks/summary` (total 2) responderam 200; credencial inválida e resumo sem token retornaram 401. Nenhuma operação de escrita de tarefa/usuário foi chamada; o login pode atualizar o hash se a verificação de senha exigir rehash.
+- SQL em `TaskFlowDemo`: consultas diretas somente de leitura encontraram 3 usuários, 2 tarefas, 6 eventos de histórico e 4 migrations; procedure de resumo, function de visibilidade e trigger de proteção existem. A procedure retornou resumo e a function retornou 2 tarefas visíveis; trigger habilitada. Nenhuma escrita SQL, alteração de schema ou migration foi executada.
+- MVC: login via API, páginas Painel, Tarefas e Usuários responderam 200; logout encerrou a sessão de teste e rota protegida voltou para `/Account/Login`.
+- .NET: restore passou; build passou com 0 avisos/erros em diretório de saída temporário, pois os binários padrão estavam em uso pela API/MVC que permaneceram ativas. A suíte segura não SQL aprovou 65/65.
 
-## Validacao local mais recente — 16/11/2026
+### Testes de interface não executados
 
-- `flutter pub get`, verificacao de formato em `lib`/`test`, `flutter analyze`,
-  `flutter test` (3/3) e build APK Debug foram executados com sucesso.
-- Login, perfil, lista, detalhe e historico foram conferidos no emulador Android
-  com a API real. O token continuou valido apos reiniciar o processo do app.
-- O AVD estava sem rede virtual ativa. O acesso funcionou com o encaminhamento
-  ADB abaixo; repita-o quando reiniciar o ADB ou o emulador:
+O AVD instalado chama-se `Apple`, mas não iniciou: o Android Emulator informou espaço livre insuficiente no disco C. Havia 6,73 GB livres e o AVD está configurado com partição de dados de 6 GB; o comando terminou sem boot. Depois, `adb devices -l` não listou dispositivos. Não instalei nem abri o app nesta rodada.
 
-  ```powershell
-  adb reverse tcp:5046 tcp:5046
-  flutter run --dart-define=TASKFLOW_API_BASE_URL=http://127.0.0.1:5046
-  ```
+Consequentemente, inicialização da UI, login no app, persistência do token em execução, navegação, detalhes, histórico, alteração de status, tratamento visual de HTTP 409, perfil e logout Flutter não foram revalidados nesta rodada. Não foram alteradas tarefas existentes para forçar testes de escrita. A evidência de UI do emulador registrada em revisão anterior é histórica e não deve ser confundida com esta execução.
 
-- A API foi validada com consultas a health, login, perfil, tarefas, resumo,
-  detalhes e historico, alem de respostas 401/400. As operacoes de tarefas
-  foram somente de leitura; nenhuma tarefa foi criada ou alterada durante a
-  revisao.
-- O site MVC autenticou e carregou Painel, Tarefas e Usuarios.
-- Os testes SQL nao foram executados nesta revisao: o fixture cria e remove um
-  catalogo `TaskFlowIntegrationTests_<GUID>`, mas a regra desta execucao permite
-  usar somente `TaskFlowDemo`. `TaskFlowDev` nao foi conectado nem alterado.
-- O Motorola fisico nao foi usado; somente `emulator-5554` apareceu no ADB.
+Os testes automatizados SQL de integração também não foram executados: o fixture cria e exclui um catálogo `TaskFlowIntegrationTests_<GUID>`, operação proibida nesta revisão. RowVersion, conflito 409 e rollback são cobertos por registros de testes históricos, mas não foram repetidos. `TaskFlowDev` não foi conectado.
 
-O APK Debug fica em `build/app/outputs/flutter-apk/app-debug.apk`.
+Para desbloquear a próxima verificação de UI, libere espaço suficiente no disco do AVD e então confira `adb devices -l`; esta revisão não removeu arquivos nem alterou a configuração do emulador.

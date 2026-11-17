@@ -20,12 +20,13 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado — revisão final (16/11/2026)
+## Estado executado — revisão complementar (16/11/2026)
 
 - US01–US09 permanecem concluídas conforme as evidências históricas registradas abaixo.
-- **US08:** MVC executada localmente com API real; login e rotas principais responderam. A UI autenticada e os casos de erro continuam cobertos pelos testes Web.
-- **US10:** aplicativo Flutter implementado; `flutter analyze`, 3 testes e build APK passaram. No emulador, login, perfil, lista, detalhes e histórico foram verificados via ADB reverse. Logout e alteração de status não foram exercitados nesta revisão.
-- Build .NET aprovado; 65 testes não SQL aprovados. Testes SQL foram omitidos nesta revisão para não criar/remover banco de teste. `TaskFlowDev` não foi usado.
+- **US08:** MVC integrada à API. Nesta rodada, login, Painel/Tarefas/Usuários e logout foram verificados via HTTP; após logout, rota protegida voltou ao login.
+- **US10:** análise, 3 testes Flutter e APK Debug passaram. O AVD `Apple` não iniciou por espaço insuficiente no disco C; login/navegação pelo app e status/409 não foram testados nesta rodada.
+- Build .NET aprovado em diretório temporário (o output padrão estava bloqueado pelos serviços em execução); 65 testes não SQL passaram. Testes SQL automatizados foram omitidos porque criam e removem um banco temporário.
+- `TaskFlowDemo` consultado somente para leitura: procedure e function retornaram resultados, trigger está habilitada, 4 migrations; nenhuma alteração de dados ou schema. `TaskFlowDev` não foi usado.
 - US11 (desktop), US12 (Docker/Kubernetes/pipeline/implantação) e fechamento acadêmico US13 permanecem pendentes.
 
 As notas seguintes dos Dias 1 a 9 são registros históricos do estado observado em cada etapa.
@@ -122,4 +123,4 @@ Em cada dia, revisar progresso, impedimentos e capacidade. Ao final de cada spri
 Dependências principais: US02 sustenta US04–US07; US03 está implementada e precede a exposição dos próximos casos de negócio; US06 está concluída e US07 sustenta US08, US10 e US11; US09 depende da decisão de auditoria; US12 exige verificações estáveis. Detalhes diários estão no [cronograma](cronograma.md) e as execuções verificadas no [diário](diario-desenvolvimento.md).
 
 
-US09 **Concluida**: migration, function, procedure, trigger, endpoint summary e Dashboard integrados. Evidencia final: 123/123 testes aprovados, incluindo testes SQL Server isolados, testes de RowVersion e rollback transacional.
+US09 **Concluída**: migration, function, procedure, trigger, endpoint summary e Dashboard integrados. Evidência histórica de 13/11/2026: 123/123 testes aprovados, incluindo SQL Server isolado, RowVersion e rollback transacional; não foram reexecutados nesta revisão.

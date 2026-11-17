@@ -31,11 +31,11 @@ flowchart LR
     subgraph Clientes[Clientes]
         Web[TaskFlow.Web MVC]
         Mobile[Flutter mínimo]
-        Desktop[Desktop C# mínimo]
+        Desktop[Desktop C# — pendente; cliente não implementado]
     end
     Web -. servidor-servidor: Bearer / JSON .-> Api[API ASP.NET Core]
     Mobile -. HTTPS / JSON .-> Api
-    Desktop -. HTTPS / JSON .-> Api
+    Desktop -. integração planejada; não validada .-> Api
     Browser[Navegador: cookie HttpOnly protegido] --> Web
     Api --> Health[GET /health]
     Api --> Info[GET /api/info]
@@ -44,6 +44,12 @@ flowchart LR
     Application --> Infrastructure[EF Core repositories]
     Infrastructure --> SQL[(SQL Server)]
 ```
+
+## Inicialização do banco de demonstração
+
+A API não cria nem aplica migrations automaticamente. Para preparar `TaskFlowDemo`, a connection string local deve apontar explicitamente para esse catálogo e o mantenedor aplica as migrations com `dotnet ef database update` antes de iniciar o serviço. O comando usa o catálogo configurado e pode criar ou atualizar o schema; portanto, confirme o destino e o histórico antes da execução.
+
+O seeder da conta de demonstração roda somente em ambiente `Development`, com `DemoAdmin:Enabled=true`, após confirmar conexão disponível e catálogo exatamente `TaskFlowDemo`. Nome, e-mail e senha válidos são fornecidos por configuração local. A criação e o hash da senha ocorrem em transação serializável. Ele cria a conta quando ausente, não altera administrador existente e interrompe a inicialização se o e-mail já pertencer a usuário não administrador. O comando `--bootstrap-admin` é separado, interativo e restrito a `TaskFlowDev`; não serve para criar a conta em `TaskFlowDemo`.
 
 `/health` verifica que o processo HTTP responde; não atesta disponibilidade de banco. Em cada requisição com JWT, a API valida assinatura, issuer, audience e expiração e recarrega o usuário do SQL Server para aplicar o perfil atual, não o perfil antigo que esteja no token.
 
@@ -80,9 +86,9 @@ O CSS local compartilha variáveis de tema escuro em `src/TaskFlow.Web/wwwroot/c
 
 ## Evolução prevista
 
-As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4 a 7 não alteraram schema nem executaram migration; criação/histórico, paginação, listagem, edição, concorrência e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
+As migrations existentes são a única estratégia oficial de evolução do schema. O texto sobre os Dias 4 a 7 é histórico: naquele período, criação/histórico, paginação, listagem, edição, concorrência e permissões foram validados em bancos isolados.
 
-O cliente Flutter e a interface Web estão implementados e integrados à API. Na revisão final, o Flutter passou build/análise/testes e foi navegado no emulador; API e MVC também foram iniciados localmente. O cliente desktop, Docker, Kubernetes, CI/CD e implantação/monitoramento em nuvem permanecem pendentes; diretórios reservados não representam infraestrutura implantada. Resultados e limites estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).
+O cliente Flutter e a interface Web estão implementados e integrados à API. Nesta revisão complementar, o Flutter passou build/análise/testes, mas o AVD não iniciou por falta de espaço; a navegação mobile registrada em revisão anterior é evidência histórica. API e MVC foram verificadas localmente. O cliente desktop, Docker, Kubernetes, CI/CD e implantação/monitoramento em nuvem permanecem pendentes; diretórios reservados não representam infraestrutura implantada. Resultados e limites estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).
 
 ## US09 - programabilidade SQL Server e resumo do Dashboard
 
@@ -94,7 +100,7 @@ O cliente Flutter e a interface Web estão implementados e integrados à API. Na
 
 A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
 
-Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.
+Registro histórico de 13/11/2026: em SQL Server isolado, `SqlServerPersistenceTests` 11/11, `TaskEndpointTests` 32/32, `SqlServerProgrammabilityTests` 2/2 e suíte completa 123/123 passaram. Esses resultados não foram repetidos nesta revisão. Os fixtures históricos criam e removem `TaskFlowIntegrationTests_<GUID>`; a revisão atual não executou esse fluxo.
 
 
 ### Compatibilidade da trigger com EF Core SQL Server

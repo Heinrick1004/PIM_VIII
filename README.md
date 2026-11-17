@@ -49,7 +49,7 @@ $rng.Dispose()
 Remove-Variable jwtKey, bytes, rng
 ~~~
 
-O seeder opcional da conta de demonstração só inicia em Development com `DemoAdmin:Enabled=true` e exige que o catálogo conectado seja exatamente `TaskFlowDemo`. Ele recebe nome, e-mail e senha de configuração local; a senha deve atender às regras existentes. Um administrador já existente não é sobrescrito, e uma conta com o mesmo e-mail e perfil comum impede a elevação.
+O seeder opcional da conta de demonstração só inicia em Development com `DemoAdmin:Enabled=true`, conexão disponível e catálogo exatamente `TaskFlowDemo`. Ele recebe nome, e-mail e senha de configuração local; a senha deve atender às regras existentes. Um administrador já existente não é sobrescrito, e uma conta com o mesmo e-mail e perfil comum interrompe o startup sem elevação. A API não aplica migrations automaticamente; prepare o schema manualmente antes de habilitar o seeder. O comando `--bootstrap-admin` é exclusivo de `TaskFlowDev` e não deve ser usado para a demonstração.
 
 Exemplo para preparar a sessão de demonstração. Aplique as migrations antes de habilitar o seeder:
 

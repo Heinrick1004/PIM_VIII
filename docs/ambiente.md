@@ -1,6 +1,21 @@
 # Diagnóstico do ambiente e validação — atualização em 16/11/2026
 
-## Validação final desta revisão
+## Validação complementar executada nesta rodada
+
+| Verificação | Resultado observado |
+| --- | --- |
+| Git | A revisão começou na branch `main`, commit `a9b79a5`, confirmado com `origin/main`; `login-emulator.png` é um artefato local fora do versionamento. |
+| .NET | `dotnet restore TaskFlow.sln` passou. Build padrão inicialmente não conseguiu substituir assemblies porque API/MVC em execução mantinham os arquivos bloqueados; `dotnet build TaskFlow.sln --no-restore` com `BaseOutputPath` em `%TEMP%\TaskFlowFinalBuild\bin` passou com 0 avisos e 0 erros. Testes seguros não SQL: 65/65 passaram. |
+| Flutter | `flutter pub get` passou, sem atualizar restrições; `dart format --output=none --set-exit-if-changed lib test` verificou 11 arquivos (0 alterados); `flutter analyze` sem problemas; `flutter test` 3/3; `flutter build apk --debug` passou. APK: `mobile/build/app/outputs/flutter-apk/app-debug.apk`. |
+| API | `/health` 200; login de demonstração emitiu JWT; `/api/auth/me`, listagem (2 tarefas) e `/api/tasks/summary` (total 2) responderam 200. Credencial inválida e resumo sem token retornaram 401. As consultas foram de leitura. |
+| MVC | Login integrado à API, Painel, Tarefas e Usuários responderam 200. Logout da sessão HTTP de teste respondeu 200; depois dele, rota protegida redirecionou para `/Account/Login`. |
+| `TaskFlowDemo` | Consultas SQL somente de leitura: 3 usuários, 2 tarefas, 6 históricos e 4 migrations. Procedure de resumo retornou valores; function retornou 2 tarefas visíveis; trigger está habilitada. Nenhuma escrita SQL/schema ou alteração de tarefa/histórico foi feita. O fluxo de login pode atualizar um hash legado se necessário. `TaskFlowDev` não foi conectado. |
+| Emulador Android | AVD instalado `Apple` não iniciou: o Emulator reportou espaço insuficiente no disco C (6,73 GB livres; partição de dados configurada em 6 GB). Após tentativa de boot, `adb devices -l` não listou dispositivo. Nenhuma instalação ou navegação Flutter ocorreu nesta rodada. |
+| Escritas / concorrência | Status, conflito HTTP 409 e RowVersion não foram exercitados contra dados existentes. Os testes SQL foram omitidos porque seu fixture cria e exclui `TaskFlowIntegrationTests_<GUID>`, fora das restrições desta revisão. Transações de escrita não foram simuladas. |
+
+Os testes de UI do Flutter e de concorrência não podem ser declarados aprovados nesta rodada. Resultados de emulador e de suíte SQL registrados em etapas anteriores permanecem históricos e não foram repetidos. A API e o MVC permaneceram ativos durante os builds e testes.
+
+## Registro da revisão anterior — 16/11/2026
 
 | Verificação | Resultado |
 | --- | --- |
@@ -242,6 +257,6 @@ Os dois testes SqlServerProgrammabilityTests foram tentados e falharam antes de 
 
 As tentativas dentro do sandbox nao conseguiam negociar TLS/SSPI e falharam antes de inicializar o fixture. Depois os mesmos testes foram executados com permissao ampliada e passaram integralmente, conforme o resultado abaixo.
 
-### Compatibilidade EF Core e trigger
+### Registro histórico — testes SQL de 13/11/2026
 
-Configurado UseSqlOutputClause(false) no ToTable existente de Tarefa. Build aprovado. `SqlServerPersistenceTests`: 11/11; `TaskEndpointTests`: 32/32; `SqlServerProgrammabilityTests`: 2/2; suite completa: 123/123, zero falhas e zero ignorados. Os casos de concorrencia RowVersion, updates com trigger e rollback de historico passaram. A permissao ampliada permitiu ao cliente negociar TLS com o SQL Server. A fixture criou e removeu somente `TaskFlowIntegrationTests_<GUID>`; `TaskFlowDev` nao foi acessado.
+O mapeamento usa `UseSqlOutputClause(false)` na tabela Tarefa para compatibilidade com a trigger. Na validação histórica, `SqlServerPersistenceTests`: 11/11; `TaskEndpointTests`: 32/32; `SqlServerProgrammabilityTests`: 2/2; suíte: 123/123. RowVersion, atualização com trigger e rollback passaram naquela execução. Esses testes não foram repetidos na revisão atual. A fixture histórica criou e removeu somente `TaskFlowIntegrationTests_<GUID>`; `TaskFlowDev` não foi acessado.

@@ -17,7 +17,7 @@ and [Gradle Java compatibility](https://docs.gradle.org/current/userguide/compat
 
 Aplicativo Flutter para consultar tarefas da API TaskFlow. A aplicação não usa
 banco local: autenticação, tarefas, detalhes e histórico vêm da API existente.
-O projeto inclui a plataforma Android para execução em emulador ou aparelho.
+O projeto inclui a plataforma Android. A validação desta revisão usa somente o emulador Android Studio.
 
 ## Arquitetura
 
@@ -55,23 +55,13 @@ adb reverse tcp:5046 tcp:5046
 flutter run --dart-define=TASKFLOW_API_BASE_URL=http://127.0.0.1:5046
 ```
 
-Em um celular físico, use o endereço IP LAN da máquina host, por exemplo:
-
-```powershell
-flutter run --dart-define=TASKFLOW_API_BASE_URL=http://192.168.1.20:5046
-```
-
-Inicie a API escutando na interface acessível pelo dispositivo, por exemplo:
+No AVD, inicie a API na máquina host. Para o encaminhamento ADB, a API pode permanecer no loopback local; para usar `10.0.2.2`, faça-a escutar na interface host:
 
 ```powershell
 dotnet run --project ..\src\TaskFlow.Api --urls http://0.0.0.0:5046
 ```
 
-Antes de iniciar, configure `ConnectionStrings__TaskFlow` para um banco isolado
-e configure as chaves JWT por User Secrets ou variáveis de ambiente. O perfil
-Development da API aponta para `TaskFlowDev`; não o use para validação manual
-do app. Para dispositivo físico, o host precisa aceitar conexões na rede local.
-O app não inclui credenciais ou chaves de assinatura.
+Antes de iniciar a API, confirme a connection string e as chaves JWT. A validação atual usa somente `TaskFlowDemo`; não use `TaskFlowDev`. O app não inclui credenciais ou chaves de assinatura.
 
 Para outras plataformas/ambientes, passe outro valor a
 `TASKFLOW_API_BASE_URL`; não codifique IPs de rede em builds distribuídos.

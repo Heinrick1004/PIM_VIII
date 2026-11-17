@@ -1,6 +1,22 @@
-# Diagnóstico do ambiente e validação — Dias 1 a 9
+# Diagnóstico do ambiente e validação — atualização em 16/11/2026
 
-## Situação da implementação Web — Dia 9
+## Validação final desta revisão
+
+| Verificação | Resultado |
+| --- | --- |
+| Git / remoto | Branch `main`; o commit local `5186600` correspondia ao `origin/main` confirmado no GitHub antes das alterações desta revisão. |
+| .NET | `dotnet restore` e `dotnet build` passaram; build com 0 avisos e 0 erros. `dotnet test --filter "Category!=SqlServer"`: 65 aprovados, 0 reprovados e 0 ignorados. |
+| SQL Server | Testes SQL omitidos nesta revisão porque o fixture cria e remove `TaskFlowIntegrationTests_<GUID>`, fora da regra de usar somente `TaskFlowDemo`. `TaskFlowDev` não foi conectado nem alterado; `TaskFlowDemo` foi preservado. |
+| API real | Health, login válido, JWT, `/api/auth/me`, lista e resumo responderam corretamente. Requisições sem token e senha inválida retornaram 401; criação inválida foi rejeitada com 400 antes de gravar. Detalhes e 6 eventos de histórico das tarefas existentes foram consultados sem escrita. |
+| Site MVC | Login real na API e as páginas Painel, Tarefas e Usuários foram validados com HTTP 200. Site disponível localmente em `http://127.0.0.1:5080`. |
+| Flutter | `flutter pub get`, formato em `lib`/`test`, `flutter analyze` e `flutter test` (3/3) passaram. Build APK Debug e instalação/execução no emulador Android foram validados. |
+| Mobile integrado | Login, perfil, lista, detalhe, histórico e restauração de sessão após reiniciar o app foram conferidos. O AVD não tinha rede virtual; a API foi alcançada por `adb reverse tcp:5046 tcp:5046` com URL `http://127.0.0.1:5046`. |
+| Dados | As tarefas existentes foram somente consultadas. Nenhuma foi criada, alterada ou removida. O banco de demonstração já continha dados; a conta administrativa não foi sobrescrita. |
+| Limites | Motorola físico não utilizado; o ADB reconheceu apenas `emulator-5554`. Logout e alteração de status/concorrência não foram executados para preservar a sessão e os dados existentes. |
+
+O fluxo SQL Server/RowVersion continua coberto por testes históricos registrados abaixo, mas não foi reexecutado nesta revisão por sua fixture criar e remover outro catálogo. Não declarar a suíte SQL como aprovada nesta execução.
+
+## Histórico da implementação Web — Dia 9
 
 | Verificação | Resultado |
 | --- | --- |

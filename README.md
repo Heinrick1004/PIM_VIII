@@ -1,165 +1,126 @@
-# Alunos Tech TaskFlow — PIM VIII
+# TaskFlow — Alunos Tech (PIM VIII)
 
-Sistema acadêmico da UNIP para organizar tarefas internas da empresa fictícia Alunos Tech. Integra Cloud Computing e DevOps, Gerenciamento de Projetos Ágil, Programação Aplicada em .NET e Programação de Banco de Dados.
+Aplicação acadêmica para gestão de tarefas internas. O repositório contém uma API ASP.NET Core, uma interface MVC, um aplicativo Flutter para Android e persistência em SQL Server.
 
-## Estado da implementação
+## Estrutura
 
-**Dia 6 — listagem segura de tarefas:** `GET /api/tasks` oferece filtros combináveis, contagem e paginação no SQL Server. Administradores veem todas as tarefas; funcionários veem apenas as que criaram ou das quais são responsáveis. A consulta é `AsNoTracking`, ordenada por data de criação e Id decrescentes, com RowVersion em Base64.
+~~~text
+src/TaskFlow.Api/             API REST, autenticação JWT e OpenAPI
+src/TaskFlow.Web/             Interface web ASP.NET Core MVC
+src/TaskFlow.Domain/          Entidades, enums e regras do domínio
+src/TaskFlow.Application/     Contratos e abstrações
+src/TaskFlow.Infrastructure/  EF Core, migrations e repositórios SQL Server
+mobile/                       Aplicativo Flutter/Dart e plataforma Android
+database/scripts/             Script SQL de referência; não provisiona o schema
+tests/TaskFlow.Tests/          Testes de domínio, HTTP, web e SQL Server
+docs/                         Arquitetura, escopo, backlog e evidências
+infra/docker/                 Reservado
+infra/k8s/                    Reservado
+src/TaskFlow.Desktop/         Reservado
+~~~
 
-**Dia 7 — atualização de tarefas com concorrência e histórico:** `PATCH /api/tasks/{id}/status` e `PUT /api/tasks/{id}` validam `rowVersion`, aplicam regras de autorização, preservam `CriadorId`/`CriadaEmUtc`, reatribuem responsável, geram histórico atomicamente e retornam HTTP 409 em conflito SQL Server. US07 concluída por testes HTTP com SQL Server real isolado.
+API e MVC usam .NET 10; a persistência oficial é SQL Server com migrations EF Core. O cliente móvel usa Flutter, armazenamento seguro do JWT e a API existente. Consulte [arquitetura](docs/arquitetura.md), [modelo de dados](docs/modelo-dados.md) e [escopo](docs/escopo.md).
 
-Validação final Dia 7: restore e build concluídos (0 avisos/erros); **90 testes aprovados, 0 reprovados e 0 ignorados**. Categorias: Domain 27, HTTP 49, SQL Server 55 e Security 2; HTTP/SQL se sobrepõem nos testes integrados. Os resultados estão em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md).
+A API oferece `POST /api/auth/login` e `GET /api/auth/me`; gerenciamento administrativo em `/api/users`; tarefas em `/api/tasks`, incluindo resumo, detalhe, histórico, criação e atualização de status. Alterações concorrentes usam RowVersion e podem retornar HTTP 409. Consulte Swagger em Development para os schemas HTTP completos.
 
-**Dia 8 — interface MVC:** o projeto `TaskFlow.Web` fornece login/logout por cookie protegido, painel, listagem filtrável e paginada, criação/edição administrativa, detalhe com histórico, atualização de status e gestão de usuários. O cliente HTTP tipado consome a API; o JWT fica somente no ticket protegido do servidor, não em JavaScript ou HTML. Interface própria responsiva, com navegação móvel e mensagens explícitas para erros da API e conflitos 409. Os 23 testes Web passaram; as oito rotas principais autenticadas foram renderizadas com uma API temporária de pré-visualização em viewports de 360, 390, 768, 1024 e 1366 px, sem overflow horizontal. A suíte completa passou (113 aprovados); autenticação/demonstração com uma conta real ainda dependem do bootstrap manual e não foram simuladas pela API de pré-visualização.
+## Requisitos locais
 
-**Dia 9 — redesign visual e revalidação:** tema escuro em todas as telas MVC usando variáveis CSS (fundo `#0B1020`, superfície `#111827`, cards `#141C2F`, elevado `#1C2740`, borda `#273149`, azul `#6478FF`, roxo `#A78BFA`, texto `#F3F6FF`/`#A4B1CB`). Foram adicionados microestados de botões, foco, cards, loading, menu lateral móvel e feedback, com suporte a `prefers-reduced-motion`. O browser verificou login e oito rotas autenticadas em 360, 390, 768, 1024, 1366 e 1920 px, sem overflow horizontal, usando API temporária em memória. Claims de perfil são substituídos após validação em cada requisição e falhas não mantêm o perfil administrativo antigo. Restore e build passaram; a suíte completa aprovou **119 testes (0 falhas, 0 ignorados)** e a categoria Web aprovou 29. A demo de conta real ainda depende de credenciais escolhidas pelo mantenedor; `TaskFlowDev` não foi acessado.
+- .NET SDK 10.0.403 (selecionado por `global.json`) e acesso aos pacotes NuGet.
+- SQL Server local para executar a aplicação com persistência.
+- Para Android: Flutter 3.47.9 ou compatível, Dart 3.13.7, JDK 17 e Android SDK.
+- `dotnet-ef` para aplicar migrations em um ambiente novo.
 
-O histórico validado dos Dias 1–6 permanece documentado em [ambiente](docs/ambiente.md) e [diário](docs/diario-desenvolvimento.md); a validação do Dia 7 está registrada nessas mesmas páginas após a execução final.
+## Banco e segredos
 
-## Tecnologias e requisitos
+`database/scripts/001_schema.sql` é uma referência histórica. Use as migrations EF Core para criar ou atualizar o schema. A configuração de Development aponta para `TaskFlowDev`; confira `ConnectionStrings:TaskFlow` antes de iniciar a API. Não use `TaskFlowDev` em testes destrutivos.
 
-- SDK **.NET 10 LTS**, runtime ASP.NET Core 10 e Git. `global.json` seleciona 10.0.403, que está instalado no ambiente.
-- ASP.NET Core Minimal API, Entity Framework Core 10, OpenAPI/Swagger e xUnit.
-- Acesso ao NuGet para o primeiro restore, ou os pacotes necessários em cache.
-- SQL Server local em desenvolvimento real, usando a base `TaskFlowDev` com migrations EF Core e conexão por autenticação integrada.
-- Flutter e Docker não são requisitos para executar os projetos atuais.
+Para uma demonstração isolada, configure `ConnectionStrings:TaskFlow` para `TaskFlowDemo`, aplique as migrations e mantenha as configurações somente na sessão local. A chave JWT deve ser Base64 com ao menos 256 bits aleatórios e ser fornecida por User Secrets ou pelo ambiente; nunca a versione. Exemplo para gerar uma chave nos User Secrets:
 
-A solução foi migrada para **.NET 10 LTS** e validada com SDK 10.0.403 instalado no ambiente. A estratégia de persistência usa EF Core 10 e migrations oficiais em SQL Server local, sem segredos versionados no repositório. [Política de suporte da Microsoft](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core).
+~~~powershell
+$bytes = New-Object byte[] 64
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$jwtKey = [Convert]::ToBase64String($bytes)
+dotnet user-secrets set "Authentication:Jwt:SigningKey" $jwtKey --project src/TaskFlow.Api
+dotnet user-secrets set "Authentication:Jwt:Issuer" "TaskFlow.Local" --project src/TaskFlow.Api
+dotnet user-secrets set "Authentication:Jwt:Audience" "TaskFlow.Local" --project src/TaskFlow.Api
+$rng.Dispose()
+[Array]::Clear($bytes, 0, $bytes.Length)
+Remove-Variable jwtKey, bytes, rng
+~~~
 
-## Organização
+O seeder opcional da conta de demonstração só inicia em Development com `DemoAdmin:Enabled=true` e exige que o catálogo conectado seja exatamente `TaskFlowDemo`. Ele recebe nome, e-mail e senha de configuração local; a senha deve atender às regras existentes. Um administrador já existente não é sobrescrito, e uma conta com o mesmo e-mail e perfil comum impede a elevação.
 
-```text
-TaskFlow.sln
-src/
-  TaskFlow.Api/              # HTTP, DI e Swagger
-  TaskFlow.Application/      # Contratos e informações da aplicação
-  TaskFlow.Domain/           # Entidades, enums e invariantes
-  TaskFlow.Infrastructure/   # EF Core, migrations e repositórios SQL Server
-  TaskFlow.Web/              # Interface ASP.NET Core MVC
-  TaskFlow.Desktop/          # Reservado
-mobile/                     # Reservado para Flutter
-database/scripts/001_schema.sql
-infra/docker/               # Reservado
-infra/k8s/                  # Reservado
-tests/TaskFlow.Tests/        # Domínio, HTTP/JWT e integração SQL Server
-docs/                       # Requisitos, decisões, planejamento e evidências
-```
+Exemplo para preparar a sessão de demonstração. Aplique as migrations antes de habilitar o seeder:
 
-Os diretórios reservados contêm somente `.gitkeep` e não integram a solução como projetos fictícios. O PDF local preexistente foi preservado e excluído do versionamento desta etapa.
+~~~powershell
+$env:ConnectionStrings__TaskFlow = 'Server=localhost;Database=TaskFlowDemo;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=True;'
+$env:DemoAdmin__Name = 'Administrador de Demonstração'
+$env:DemoAdmin__Email = Read-Host 'E-mail da conta de demonstração'
+$securePassword = Read-Host 'Senha (12 a 128 caracteres)' -AsSecureString
+$env:DemoAdmin__Password = (New-Object System.Net.NetworkCredential('', $securePassword)).Password
+dotnet ef database update --project src/TaskFlow.Infrastructure --startup-project src/TaskFlow.Api --context TaskFlowDbContext
+$env:DemoAdmin__Enabled = 'true'
+dotnet run --project src/TaskFlow.Api --launch-profile http
+~~~
 
-## Executar localmente
+Depois de encerrar a API, remova as variáveis de ambiente dessa sessão. Preserve o banco `TaskFlowDemo` e seus dados. Não grave credenciais em arquivos do repositório.
 
-Na raiz do repositório, em PowerShell ou outro terminal com o SDK disponível:
+## Executar a API e o site
 
-```powershell
-dotnet --version
+Na raiz do repositório, com a chave JWT local configurada e a connection string apontando para o banco escolhido:
+
+~~~powershell
 dotnet restore TaskFlow.sln
 dotnet build TaskFlow.sln --no-restore
-dotnet test TaskFlow.sln
-dotnet run --project src/TaskFlow.Api --no-build --no-restore --launch-profile http
-```
+dotnet run --project src/TaskFlow.Api --launch-profile http
+~~~
 
-A API usa `http://localhost:5046` nesse perfil e o ambiente `Development`. Acesse [Swagger](http://localhost:5046/swagger) ou consulte em outro terminal:
+O perfil HTTP usa a porta 5046. A documentação OpenAPI fica em `/swagger` e o health check em `/health`. Inicie o MVC em outro terminal:
 
-```powershell
-Invoke-RestMethod http://localhost:5046/health
-Invoke-RestMethod http://localhost:5046/api/info
-```
-
-`src/TaskFlow.Api/TaskFlow.Api.http` contém as mesmas requisições. Encerre a API com `Ctrl+C`.
-
-### Executar a interface web
-
-Configure a chave JWT e, se necessário, execute o bootstrap explícito do primeiro administrador conforme [ambiente](docs/ambiente.md). Não há credenciais padrão. Com a API em execução e configurada, inicie a interface em outro terminal:
-
-```powershell
+~~~powershell
 dotnet run --project src/TaskFlow.Web --launch-profile http
-```
+~~~
 
-Abra `http://localhost:5080`. A URL da API em Development está em `src/TaskFlow.Web/appsettings.Development.json` (`http://localhost:5046`). Ajuste a configuração externa para outro ambiente; em produção configure HTTPS e chaves de Data Protection persistentes. Para testar a interface: autentique-se, consulte o painel e as tarefas; administradores podem criar/editar tarefas e usuários, enquanto funcionários podem atualizar o status das tarefas atribuídas. Não use `TaskFlowDev` para testes automatizados.
+Abra `http://localhost:5080`. Em Development, o MVC consome a API em `http://localhost:5046`; fora desse ambiente, use HTTPS e configure chaves persistentes de Data Protection.
 
-| Rota | Resposta implementada |
-| --- | --- |
-| `GET /health` | HTTP 200, `status: "Healthy"` e `timestampUtc` atual em UTC |
-| `GET /api/info` | HTTP 200, `name: "TaskFlow"`, `version: "0.1.0"` e descrição |
-| `POST /api/auth/login` | Valida e-mail/senha e emite token de acesso assinado com duração de 60 minutos |
-| `GET /api/auth/me` | Requer JWT e devolve o perfil atual do usuário autenticado |
-| `POST /api/users` | Somente Administrador; cria funcionário ou administrador |
-| `GET /api/users` | Somente Administrador; listagem paginada, `pageSize` máximo 100 |
-| `GET /api/users/{id}` | Somente Administrador; consulta pública ou 404 |
-| `PUT /api/users/{id}` | Somente Administrador; atualiza nome, e-mail e perfil |
-| `POST /api/tasks` | Somente Administrador; cria tarefa e histórico atomicamente; responsável funcionário opcional |
-| `GET /api/tasks` | JWT obrigatório; lista paginada, filtros `status`, `prioridade`, `responsavelId`, `semResponsavel` e `titulo`; `page` (1) / `pageSize` (20, máximo 100); administrador vê tudo, funcionário vê tarefas criadas ou atribuídas a si |
-| `PATCH /api/tasks/{id}/status` | JWT obrigatório; exige `status` e `rowVersion` Base64 de 8 bytes; administrador pode atualizar qualquer tarefa, funcionário somente se responsável atual; retorna 409 em versão desatualizada |
-| `PUT /api/tasks/{id}` | Somente Administrador; exige `rowVersion` e atualiza somente campos administrativos enviados (`titulo`, `descricao`, `prioridade`, `prazoUtc`, `responsavelId`); descrição, prazo e responsável aceitam `null` para remoção; status é alterado exclusivamente pela rota PATCH |
-| `GET /api/tasks/{id}` | JWT obrigatório; Administrador consulta qualquer tarefa, funcionário somente se criador ou responsável |
-| `GET /api/tasks/{id}/history` | JWT obrigatório; mesma regra de visibilidade, histórico somente leitura e paginação `page` (1) / `pageSize` (20, máximo 100) |
-| `GET /swagger/v1/swagger.json` | Especificação OpenAPI, apenas em desenvolvimento |
-| `GET /swagger/index.html` | Interface Swagger, apenas em desenvolvimento |
+## Executar o aplicativo Android
 
-Rotas protegidas retornam 401 sem token e 403 quando não há permissão. O perfil é revalidado no SQL Server em toda requisição autenticada. Filtros da lista são combinados com AND; `semResponsavel=true` seleciona tarefas sem responsável. A resposta paginada tem `items`, `page`, `pageSize` e `totalCount`. A resposta de tarefa apresenta RowVersion em Base64. Cada mudança efetiva persiste seus eventos na mesma transação; eventos não copiam texto livre ou identificadores de responsável para a descrição. Endpoints de modificação de histórico não foram implementados. `/health` é uma verificação de vida do processo HTTP; não verifica dependências externas. Nullable está habilitado e warnings são tratados como erros por `Directory.Build.props`.
+Na pasta `mobile`:
 
-O histórico retorna `{ items, page, pageSize, totalCount }`; cada item contém `id`, `tarefaId`, `usuarioId`, `acao`, `dataUtc` e `descricao`. A ordenação é ascendente por data UTC e Id para desempate.
+~~~powershell
+flutter pub get
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+flutter build apk --debug
+~~~
 
-## Banco e configuração
+Com a API local na porta 5046, uma opção para o emulador Android Studio é encaminhar a porta pelo ADB e executar o app apontando para o loopback do dispositivo:
 
-**EF Core migrations são o único mecanismo oficial de criação/evolução do schema.** `database/scripts/001_schema.sql` permanece somente como referência e não foi executado. `InitialCreate`, `HardenPersistenceMappings` e `DatabaseDefaults` estão aplicadas em `TaskFlowDev`; não se usa `EnsureCreated()` nem migração automática no startup. O banco existente foi preservado.
+~~~powershell
+adb reverse tcp:5046 tcp:5046
+flutter run --dart-define=TASKFLOW_API_BASE_URL=http://127.0.0.1:5046
+~~~
 
-Em Development, a API lê `ConnectionStrings:TaskFlow` de `src/TaskFlow.Api/appsettings.Development.json` e usa autenticação integrada para `TaskFlowDev`; não há senha no repositório. Ambientes sem essa configuração falham explicitamente. A suíte SQL cria um banco temporário `TaskFlowIntegrationTests_<GUID>` por execução, aplica migrations e remove apenas esse banco gerado. Testes automatizados não conectam nem escrevem em `TaskFlowDev`; o teste de configuração verifica apenas o catálogo informado. Para outro SQL Server, defina `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` fora do repositório; a conta precisa de permissão para criar e remover bancos de teste. Credenciais de usuários e hashes não são fornecidos.
+O encaminhamento é temporário e deve ser repetido quando necessário. Sem ele, o valor padrão do app é `http://10.0.2.2:5046`. Para detalhes de configuração e rede, consulte [mobile/README.md](mobile/README.md) e [mobile/INTEGRATION.md](mobile/INTEGRATION.md).
 
-### Segredo JWT e primeiro administrador (PowerShell)
+O APK de depuração é gerado em `mobile/build/app/outputs/flutter-apk/app-debug.apk`.
 
-A chave JWT deve ser Base64 de ao menos 32 bytes aleatórios e fica somente no User Secrets ou variável externa. Configure-a localmente:
+## Testes
 
-```powershell
-$jwtKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(64))
-dotnet user-secrets set "Authentication:Jwt:SigningKey" $jwtKey --project src/TaskFlow.Api
-Remove-Variable jwtKey
-```
-
-Em outros ambientes, configure `Authentication__Jwt__SigningKey`, `Authentication__Jwt__Issuer` e `Authentication__Jwt__Audience` por variáveis seguras do ambiente/orquestrador. A ausência da chave nunca gera fallback.
-
-Em seguida, execute **explicitamente** o bootstrap; ele solicita nome/e-mail no terminal e lê a senha sem exibi-la. Só aceita o banco `TaskFlowDev`, não aplica migrations e não substitui administrador existente:
-
-```powershell
-dotnet run --project src/TaskFlow.Api --launch-profile http -- --bootstrap-admin
-```
-
-Para testar os endpoints, execute a API em Development, faça login em `POST /api/auth/login`, copie o access token para **Authorize** no Swagger e use `GET /api/auth/me` ou as rotas administrativas. Nunca registre ou compartilhe o token.
-
-Senhas são armazenadas com `PasswordHasher<Usuario>` do ASP.NET Core Identity (salt e derivação própria para senhas); mínimo de 12 caracteres, máximo de 128, com rehash automático quando necessário. E-mail é normalizado e a unicidade é garantida pela constraint SQL Server; conflitos retornam 409. Nenhum endpoint expõe `PasswordHash`.
-
-Para executar testes por categoria:
-
-```powershell
-dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Web"
-dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Domain"
-dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Http"
+~~~powershell
+dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category!=SqlServer"
 dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=SqlServer"
-dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "Category=Security"
-```
+~~~
 
-## Documentação e próximos passos
+Os testes SQL usam o fixture `TaskFlowIntegrationTests_<GUID>`, que cria e remove somente o catálogo gerado para a execução. Eles exigem uma conexão SQL Server com permissão para criar e remover bancos; confira o destino antes de executá-los. A validação mobile também inclui `flutter analyze`, `flutter test` e `flutter build apk --debug`.
 
-- [Escopo, RF01–RF08, RNF01–RNF08 e permissões](docs/escopo.md)
-- [Arquitetura e comunicação entre clientes, API e SQL Server](docs/arquitetura.md)
-- [Modelo de dados e objetos SQL planejados](docs/modelo-dados.md)
-- [Backlog com três sprints](docs/backlog.md)
-- [Cronograma de 09 a 22/11/2026](docs/cronograma.md)
-- [Diagnóstico e verificações](docs/ambiente.md)
-- [Diário de desenvolvimento](docs/diario-desenvolvimento.md)
-- [Créditos e pesquisa de componentes de interface](docs/creditos-interface.md)
+## Escopo do PIM VIII
 
-Pendências próximas: executar manualmente o bootstrap com senha definida pelo mantenedor e demonstrar a integração da interface com a API em `TaskFlowDev`; concluir a validação com conta real antes de fechar US08. O redesign visual foi inspecionado com dados temporários em memória; isso não comprova login real nem dados persistidos. `TaskFlowDev` não foi usado. US07 foi concluída e publicada; US09 (objetos SQL) foi concluida e validada; clientes Flutter/desktop, Docker, Kubernetes e CI/CD permanecem planejados. O plano de duas semanas não representa a data oficial de entrega da instituição.
+O projeto implementa clientes Web e Mobile integrados, API modular em C#, backlog e planejamento ágil documentados, migrations, procedures, function, trigger, transações, índices, autorização e concorrência com RowVersion.
 
-## US09 - programabilidade SQL Server e resumo do Dashboard
+Permanecem pendentes de implementação/evidência no repositório: aplicação desktop, ambiente em nuvem implantado, pipeline CI/CD, Docker, Kubernetes e operação com monitoramento e escalabilidade. `infra/docker`, `infra/k8s` e `src/TaskFlow.Desktop` são apenas placeholders. O relatório acadêmico final do PIM não faz parte deste repositório.
 
-`dbo.fn_TarefasVisiveis(@UsuarioId)` e uma inline TVF somente-leitura que retorna IDs de tarefas criadas pelo usuario ou atribuidas a ele. O valor GUID vazio nao retorna tarefas; o predicado `OR` evita duplicidade se a pessoa for criadora e responsavel.
-
-`dbo.usp_TarefasResumo(@UsuarioId,@EhAdministrador)` calcula no SQL Server o total, pendentes (status 1), em andamento (2) e concluidas (3). Administradores recebem o resumo global; funcionarios usam a function para limitar o conjunto visivel. A procedure retorna uma linha com zeros quando o conjunto e vazio.
-
-`dbo.TR_Tarefas_ProtegeDadosCriacao` compara `inserted` e `deleted` e rejeita mudanca real de `CriadorId` ou `CriadaEmUtc`, inclusive em updates de varias linhas. Updates normais continuam permitidos; a trigger nao cria historico e nao altera `Versao`.
-
-A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
-
-Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.
+O histórico de execução e as limitações conhecidas estão em [docs/ambiente.md](docs/ambiente.md), [docs/diario-desenvolvimento.md](docs/diario-desenvolvimento.md), [docs/backlog.md](docs/backlog.md) e [docs/cronograma.md](docs/cronograma.md). O `Manual.pdf` local permanece fora do versionamento.
+\n

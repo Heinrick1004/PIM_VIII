@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using TaskFlow.Api.Authentication;
@@ -46,6 +47,7 @@ builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<AdminBootstrapper>();
+builder.Services.AddScoped<DemoAdminSeeder>();
 builder.Services.AddTaskFlowInfrastructure(builder.Configuration);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -121,6 +123,43 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoAdmin:Enabled"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var context = scope.ServiceProvider.GetRequiredService<TaskFlowDbContext>();
+    var databaseName = context.Database.GetDbConnection().Database;
+    if (!string.Equals(databaseName, "TaskFlowDemo", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "A cria\u00e7\u00e3o da conta de demonstra\u00e7\u00e3o est\u00e1 restrita ao banco TaskFlowDemo.");
+    }
+
+    if (!await context.Database.CanConnectAsync())
+    {
+        throw new InvalidOperationException("N\u00e3o foi poss\u00edvel conectar ao banco TaskFlowDemo.");
+    }
+
+    var demoAdmin = builder.Configuration.GetSection("DemoAdmin");
+    var name = demoAdmin["Name"];
+    var email = demoAdmin["Email"];
+    var password = demoAdmin["Password"];
+    if (string.IsNullOrWhiteSpace(name)
+        || string.IsNullOrWhiteSpace(email)
+        || string.IsNullOrWhiteSpace(password))
+    {
+        throw new InvalidOperationException(
+            "Configure DemoAdmin:Name, DemoAdmin:Email e DemoAdmin:Password para habilitar o seed local.");
+    }
+
+    var created = await scope.ServiceProvider.GetRequiredService<DemoAdminSeeder>()
+        .EnsureAdministratorAsync(name, email, password);
+    app.Logger.LogInformation(
+        created
+            ? "A conta administrativa de demonstra\u00e7\u00e3o foi criada para {Email}."
+            : "A conta administrativa de demonstra\u00e7\u00e3o para {Email} j\u00e1 existe; nenhuma altera\u00e7\u00e3o foi feita.",
+        email);
+}
 
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())

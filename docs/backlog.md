@@ -20,7 +20,17 @@ Plano inicial em 09/11/2026. A prioridade usa P0 (necessário para iniciar com s
 | US12 | Como mantenedor, quero executar a API em contêiner e validar a entrega por pipeline. | P2 / 5 | RF08, RNF06, RNF07 | Dockerfile funcional; imagem compilada; manifests Kubernetes mínimos e probes coerentes; pipeline executa restore/build/testes; implantação e configuração externa documentadas com evidências reais. | S3 |
 | US13 | Como equipe, queremos fechar a entrega com rastreabilidade e demonstração verificável. | P1 / 3 | RNF06, RNF08 | Revisar RF/RNF e histórias; executar testes integrados; registrar pendências conhecidas e evidências das quatro disciplinas; revisar instruções de execução; demonstrar fluxo entre clientes/API/SQL. | S3 |
 
-## Estado executado até o Dia 9
+## Estado executado — revisão final (16/11/2026)
+
+- US01–US09 permanecem concluídas conforme as evidências históricas registradas abaixo.
+- **US08:** MVC executada localmente com API real; login e rotas principais responderam. A UI autenticada e os casos de erro continuam cobertos pelos testes Web.
+- **US10:** aplicativo Flutter implementado; `flutter analyze`, 3 testes e build APK passaram. No emulador, login, perfil, lista, detalhes e histórico foram verificados via ADB reverse. Logout e alteração de status não foram exercitados nesta revisão.
+- Build .NET aprovado; 65 testes não SQL aprovados. Testes SQL foram omitidos nesta revisão para não criar/remover banco de teste. `TaskFlowDev` não foi usado.
+- US11 (desktop), US12 (Docker/Kubernetes/pipeline/implantação) e fechamento acadêmico US13 permanecem pendentes.
+
+As notas seguintes dos Dias 1 a 9 são registros históricos do estado observado em cada etapa.
+
+## Estado executado até o Dia 9 — registro histórico
 
 - **Concluídas após revisão da Sprint 1:** US01 (base), US02 (SQL Server/migrations), US03 (JWT e autorização), US04 (gerenciamento de usuários) e US05 (criação/atribuição de tarefa com histórico transacional). Critérios e evidências estão na revisão abaixo.
 - **Pendência de operação:** o bootstrap no banco `TaskFlowDev` e a demonstração com uma senha definida pelo mantenedor não foram executados. Não foram inventadas credenciais nem criados usuários persistentes em `TaskFlowDev`.

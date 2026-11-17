@@ -82,7 +82,7 @@ O CSS local compartilha variáveis de tema escuro em `src/TaskFlow.Web/wwwroot/c
 
 As migrations existentes são a única estratégia oficial de evolução do schema. Os Dias 4 a 7 não alteraram schema nem executaram migration; criação/histórico, paginação, listagem, edição, concorrência e permissões foram validados em bancos isolados. O fluxo manual de bootstrap e a demonstração em `TaskFlowDev` ainda requerem credenciais escolhidas pelo mantenedor.
 
-Docker, Kubernetes, CI/CD e clientes Flutter/desktop pertencem às próximas sprints; diretórios reservados não representam infraestrutura implantada. A interface Web foi implementada no Dia 8, mas a conclusão da US08 depende da validação final, inspeção das telas autenticadas e demonstração real. Resultados medidos estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).
+O cliente Flutter e a interface Web estão implementados e integrados à API. Na revisão final, o Flutter passou build/análise/testes e foi navegado no emulador; API e MVC também foram iniciados localmente. O cliente desktop, Docker, Kubernetes, CI/CD e implantação/monitoramento em nuvem permanecem pendentes; diretórios reservados não representam infraestrutura implantada. Resultados e limites estão em [ambiente](ambiente.md) e [diário](diario-desenvolvimento.md).
 
 ## US09 - programabilidade SQL Server e resumo do Dashboard
 

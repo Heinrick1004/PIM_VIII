@@ -15,6 +15,8 @@ using TaskFlow.Infrastructure.Data;
 using TaskFlow.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole();
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {
@@ -180,6 +182,22 @@ app.MapGet("/health", (TimeProvider clock) => Results.Ok(new
     timestampUtc = clock.GetUtcNow().UtcDateTime
 }))
 .WithName("GetHealth")
+.AllowAnonymous();
+
+app.MapGet("/ready", async (TaskFlowDbContext database, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return await database.Database.CanConnectAsync(cancellationToken)
+            ? Results.Ok(new { status = "Ready" })
+            : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (Exception)
+    {
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+})
+.WithName("GetReadiness")
 .AllowAnonymous();
 
 app.MapGet("/api/info", (SystemInfo info) => Results.Ok(info))

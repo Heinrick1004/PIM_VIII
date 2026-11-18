@@ -1,0 +1,187 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskflow-api
+  namespace: taskflow
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskflow-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskflow-api
+    spec:
+      securityContext:
+        fsGroup: 1654
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: taskflow-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: taskflow-config
+          env:
+            - name: ConnectionStrings__TaskFlow
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-runtime
+                  key: connection-string
+            - name: Authentication__Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-runtime
+                  key: jwt-issuer
+            - name: Authentication__Jwt__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-runtime
+                  key: jwt-audience
+            - name: Authentication__Jwt__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-runtime
+                  key: jwt-signing-key
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 750m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskflow-web
+  namespace: taskflow
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskflow-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskflow-web
+    spec:
+      securityContext:
+        fsGroup: 1654
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: taskflow-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: taskflow-config
+          volumeMounts:
+            - name: data-protection-keys
+              mountPath: /var/taskflow-keys
+          startupProbe:
+            httpGet:
+              path: /Account/Login
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /Account/Login
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /Account/Login
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: data-protection-keys
+          persistentVolumeClaim:
+            claimName: taskflow-web-keys
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: taskflow-api
+  namespace: taskflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: taskflow-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: taskflow-web
+  namespace: taskflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: taskflow-web
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

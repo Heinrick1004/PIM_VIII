@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/.git/
+**/.vs/
+**/TestResults/
+**/node_modules/
+mobile/
+artifacts/
+.env
+*.user
+*.suo
+*.mdf
+*.ldf
+*.bak

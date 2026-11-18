@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskflow-config
+  namespace: taskflow
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_HTTP_PORTS: "8080"
+  Api__BaseUrl: https://api.taskflow.example.com
+  DataProtection__KeysPath: /var/taskflow-keys
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-api
+  namespace: taskflow
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskflow-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-web
+  namespace: taskflow
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskflow-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskflow
+  namespace: taskflow
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - taskflow.example.com
+        - api.taskflow.example.com
+      secretName: taskflow-ingress-tls
+  rules:
+    - host: taskflow.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-web
+                port:
+                  number: 8080
+    - host: api.taskflow.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-api
+                port:
+                  number: 8080

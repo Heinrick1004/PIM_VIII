@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__TaskFlow: ${TASKFLOW_CONNECTION_STRING:?set TASKFLOW_CONNECTION_STRING in .env}
+      Authentication__Jwt__Issuer: ${TASKFLOW_JWT_ISSUER:?set TASKFLOW_JWT_ISSUER in .env}
+      Authentication__Jwt__Audience: ${TASKFLOW_JWT_AUDIENCE:?set TASKFLOW_JWT_AUDIENCE in .env}
+      Authentication__Jwt__SigningKey: ${TASKFLOW_JWT_SIGNING_KEY:?set TASKFLOW_JWT_SIGNING_KEY in .env}
+      ASPNETCORE_HTTP_PORTS: 8080
+    ports:
+      - "127.0.0.1:5046:8080"
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Api__BaseUrl: http://api:8080
+      ASPNETCORE_HTTP_PORTS: 8080
+    ports:
+      - "127.0.0.1:5080:8080"
+    depends_on:
+      api:
+        condition: service_healthy

@@ -124,3 +124,7 @@ Dependências principais: US02 sustenta US04–US07; US03 está implementada e p
 
 
 US09 **Concluída**: migration, function, procedure, trigger, endpoint summary e Dashboard integrados. Evidência histórica de 13/11/2026: 123/123 testes aprovados, incluindo SQL Server isolado, RowVersion e rollback transacional; não foram reexecutados nesta revisão.
+
+## Estado de auditoria — 17/11/2026
+
+A revisão complementar anterior (16/11) é histórica. Desde então, Desktop foi implementado e passou build e testes HTTP isolados; a configuração Cloud/DevOps foi preparada, mas Docker, CI remoto, cluster e implantação cloud ainda não foram executados. O Flutter continua validado pelo responsável e não é reclassificado como pendente devido ao AVD. Para requisitos de banco, gestão ágil e rastreabilidade, consulte [auditoria-pim.md](auditoria-pim.md).

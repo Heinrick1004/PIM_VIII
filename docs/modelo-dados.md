@@ -113,3 +113,7 @@ Esses nomes representam o planejamento, não arquivos já presentes. Os artefato
 A migration EF Core `20261113090000_AddTaskFlowProgrammability` cria os tres objetos em batches separados e o Down os remove na ordem trigger, procedure, function. A API expoe `GET /api/tasks/summary`, deriva usuario e perfil dos claims autenticados, e retorna DTO publico. O Dashboard chama esse endpoint e a listagem existente de cinco tarefas recentes em paralelo.
 
 Testes SQL Server: configurar `TASKFLOW_TEST_SQLSERVER_CONNECTION_STRING` e executar `dotnet test tests/TaskFlow.Tests/TaskFlow.Tests.csproj --filter "FullyQualifiedName~SqlServerProgrammabilityTests"`. O fixture deve criar/remover exclusivamente `TaskFlowIntegrationTests_<GUID>`; nunca executar contra `TaskFlowDev`. Validacao final executada em SQL Server real isolado: SqlServerPersistenceTests 11/11, TaskEndpointTests 32/32, SqlServerProgrammabilityTests 2/2 e suite completa 123/123; TaskFlowDev nao foi acessado.
+
+## Atualização de estado — auditoria de 17/11/2026
+
+A linha acima chamada “Objetos programáveis planejados” registra o planejamento histórico do Dia 1. Ela foi supersedida pela migration `20261113090000_AddTaskFlowProgrammability`, que cria a function, procedure e trigger documentadas em US09. A auditoria atual e os limites de evidência estão em [auditoria-pim.md](auditoria-pim.md).

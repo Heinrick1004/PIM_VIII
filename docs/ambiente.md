@@ -260,3 +260,9 @@ As tentativas dentro do sandbox nao conseguiam negociar TLS/SSPI e falharam ante
 ### Registro histórico — testes SQL de 13/11/2026
 
 O mapeamento usa `UseSqlOutputClause(false)` na tabela Tarefa para compatibilidade com a trigger. Na validação histórica, `SqlServerPersistenceTests`: 11/11; `TaskEndpointTests`: 32/32; `SqlServerProgrammabilityTests`: 2/2; suíte: 123/123. RowVersion, atualização com trigger e rollback passaram naquela execução. Esses testes não foram repetidos na revisão atual. A fixture histórica criou e removeu somente `TaskFlowIntegrationTests_<GUID>`; `TaskFlowDev` não foi acessado.
+
+## Cloud/DevOps — revisão de 17/11/2026
+
+Implementados: Dockerfiles API/MVC, Compose local apontando para SQL externo, CI GitHub Actions (build/testes .NET e build de imagens), manifests Kubernetes, probes de liveness/readiness, configurações/segredos externos, limites de recursos e HPA. Também foi separado `/ready` (conectividade SQL) de `/health` (processo) e os logs da API/MVC passaram a JSON no console.
+
+Não executados: Docker build/container/healthcheck, parser/rollout Kubernetes e workflow remoto. Neste ambiente não há comandos Docker, kubectl, Helm, provedor cloud ou cluster configurado; PyYAML também não está instalado. Não instalei ferramentas nem criei recursos cloud. A validação restante exige runner do GitHub após push autorizado e cluster com ingress, storage RWX, metrics-server, secrets e imagens publicadas. A proposta cloud e os comandos estão em [infra/README.md](../infra/README.md).

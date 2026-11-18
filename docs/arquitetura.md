@@ -106,3 +106,13 @@ Registro histórico de 13/11/2026: em SQL Server isolado, `SqlServerPersistenceT
 ### Compatibilidade da trigger com EF Core SQL Server
 
 O mapeamento existente de Tarefas chama UseSqlOutputClause(false) no TableBuilder porque a tabela possui trigger DML. A configuracao afeta somente a forma dos comandos gerados pelo provider; Versao continua configurada como rowversion e token de concorrencia. A trigger de imutabilidade permanece habilitada.
+
+## Cliente Desktop (17/11/2026)
+
+`TaskFlow.Desktop` é um cliente WinForms em .NET 10, escolhido por estar disponível no ambiente Windows sem workloads ou dependências adicionais. Mantém DTOs e serviço HTTP próprios, usa JWT somente durante a sessão em memória e delega permissões à API. Implementa login, listagem paginada, detalhe, histórico, alteração de status com RowVersion e tratamento de 400/401/403/404/409. No 409 a interface recarrega a lista/detalhe atual para o usuário revisar. Build e testes HTTP isolados passaram; o fluxo autenticado real não foi exercitado nesta rodada por ausência de API ativa e configuração de credenciais de demonstração.
+
+## Cloud e DevOps (17/11/2026)
+
+Há Dockerfiles multi-stage para API/MVC, Compose de desenvolvimento sem banco embutido, workflow GitHub Actions sem deploy e manifests Kubernetes para Deployments separados, Services internos, Ingress TLS, probes, requests/limits, HPAs e armazenamento compartilhado do key ring Data Protection do MVC. `/health` é liveness de processo; `/ready` verifica conectividade com SQL Server para readiness. API e MVC emitem logs JSON no console. Os manifests referenciam secrets externos e não contêm credenciais.
+
+A arquitetura alvo usa Kubernetes gerenciado, Ingress HTTPS, SQL Server gerenciado em rede privada, secret manager, logs/alertas do provedor, backups/PITR e HPA. É uma proposta, não implantação. Docker, kubectl/cluster, registry, provedor e credenciais cloud não estão disponíveis; build real de containers, execução de CI remoto e rollout Kubernetes não foram comprovados. Veja [infra/README.md](../infra/README.md).

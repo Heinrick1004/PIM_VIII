@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using TaskFlow.Web.Services;
 
 namespace TaskFlow.Web;
@@ -11,9 +12,16 @@ public partial class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        builder.Logging.ClearProviders();
+        builder.Logging.AddJsonConsole();
 
         builder.Services.AddControllersWithViews();
-        builder.Services.AddDataProtection();
+        var dataProtection = builder.Services.AddDataProtection().SetApplicationName("TaskFlow.Web");
+        var keyDirectory = builder.Configuration["DataProtection:KeysPath"];
+        if (!string.IsNullOrWhiteSpace(keyDirectory))
+        {
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+        }
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped<TaskFlowUserDirectory>();

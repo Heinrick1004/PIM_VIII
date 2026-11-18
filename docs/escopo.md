@@ -108,3 +108,11 @@ JWT exige issuer, audience e chave HMAC externa em Base64 com ao menos 256 bits;
 
 - [Arquitetura](arquitetura.md), [modelo de dados](modelo-dados.md) e [ambiente](ambiente.md).
 - [Backlog](backlog.md), [cronograma](cronograma.md) e [diário de desenvolvimento](diario-desenvolvimento.md).
+
+### Implementação Desktop (17/11/2026)
+
+O cliente mínimo WinForms .NET 10 foi implementado em `src/TaskFlow.Desktop` e incluído em `TaskFlow.sln`. `dotnet restore`, builds do Desktop e da solução e sete testes HTTP isolados passaram; a suíte segura existente também passou (65 testes). Não foi possível validar login/lista/escrita contra a API real nesta rodada: nenhuma API estava escutando em `localhost:5046` e não havia credenciais de demonstração disponibilizadas em configuração local. Nenhum banco foi usado para testes e nenhuma operação real de escrita foi executada.
+
+## Atualização de estado — auditoria de 17/11/2026
+
+Este documento contém registros históricos de planejamento e execução. Para o estado atualizado, use [auditoria de evidências](auditoria-pim.md): Mobile permanece validado pelo responsável; Desktop WinForms está implementado com build/testes isolados, sem demonstração autenticada real; arquivos Docker/CI/Kubernetes foram preparados, sem validação operacional. A suíte SQL continua representada por resultados históricos; não foi executada nesta auditoria.

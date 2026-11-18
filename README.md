@@ -16,7 +16,7 @@ tests/TaskFlow.Tests/          Testes de domínio, HTTP, web e SQL Server
 docs/                         Arquitetura, escopo, backlog e evidências
 infra/docker/                 Reservado
 infra/k8s/                    Reservado
-src/TaskFlow.Desktop/         Reservado
+src/TaskFlow.Desktop/         Cliente WinForms C# para API
 ~~~
 
 API e MVC usam .NET 10; a persistência oficial é SQL Server com migrations EF Core. O cliente móvel usa Flutter, armazenamento seguro do JWT e a API existente. Consulte [arquitetura](docs/arquitetura.md), [modelo de dados](docs/modelo-dados.md) e [escopo](docs/escopo.md).
@@ -84,6 +84,28 @@ dotnet run --project src/TaskFlow.Web --launch-profile http
 
 Abra `http://localhost:5080`. Em Development, o MVC consome a API em `http://localhost:5046`; fora desse ambiente, use HTTPS e configure chaves persistentes de Data Protection.
 
+## Executar o cliente Desktop
+
+Com a API em execução, execute em outro terminal:
+
+~~~powershell
+dotnet run --project src/TaskFlow.Desktop
+~~~
+
+A tela permite configurar a URL base (padrão `http://localhost:5046/`), autenticar, consultar tarefas/detalhes/histórico e atualizar status. O JWT permanece apenas na memória do processo; logout ou expiração encerra a sessão.
+
+## Containers e CI
+
+Docker Compose local (API e MVC; usa um SQL Server externo, não cria nem migra banco):
+
+~~~powershell
+Copy-Item infra/docker/.env.example infra/docker/.env
+# Edite .env com uma connection string de ambiente local e uma chave JWT de teste.
+docker compose --env-file infra/docker/.env -f infra/docker/compose.yaml up --build
+~~~
+
+A API fica em `http://localhost:5046`, o MVC em `http://localhost:5080`. Não use este perfil Development como implantação pública. O workflow `.github/workflows/ci.yml` executa restore/build/testes .NET seguros e build das imagens em pull requests e pushes para `main`; não faz deploy. Kubernetes e dependências de produção estão descritos em [infra/README.md](infra/README.md). Docker e cluster ainda precisam estar instalados/configurados para validação local.
+
 ## Executar o aplicativo Android
 
 Na pasta `mobile`:
@@ -118,9 +140,13 @@ Os testes SQL usam o fixture `TaskFlowIntegrationTests_<GUID>`, que cria e remov
 
 ## Escopo do PIM VIII
 
-O projeto implementa clientes Web e Mobile integrados, API modular em C#, backlog e planejamento ágil documentados, migrations, procedures, function, trigger, transações, índices, autorização e concorrência com RowVersion.
+O projeto implementa clientes Web, Mobile e Desktop integrados, API modular em C#, backlog e planejamento ágil documentados, migrations, procedures, function, trigger, transações, índices, autorização e concorrência com RowVersion.
 
-Permanecem pendentes de implementação/evidência no repositório: aplicação desktop, ambiente em nuvem implantado, pipeline CI/CD, Docker, Kubernetes e operação com monitoramento e escalabilidade. `infra/docker`, `infra/k8s` e `src/TaskFlow.Desktop` são apenas placeholders. O relatório acadêmico final do PIM não faz parte deste repositório.
+Dockerfiles, Compose local, workflow CI e templates Kubernetes estão versionados como artefatos de configuração. O workflow é acionado por pushes para `main`, pull requests e execução manual; seu resultado pode ser acompanhado em Actions. A implantação cloud depende de provedor, cluster, registry, domínio e segredos configurados. Consulte [infraestrutura](infra/README.md). O relatório acadêmico final em DOCX e PDF está em [docs/entrega](docs/entrega/).
 
 O histórico de execução e as limitações conhecidas estão em [docs/ambiente.md](docs/ambiente.md), [docs/diario-desenvolvimento.md](docs/diario-desenvolvimento.md), [docs/backlog.md](docs/backlog.md) e [docs/cronograma.md](docs/cronograma.md). O `Manual.pdf` local permanece fora do versionamento.
 \n
+
+## Auditoria final PIM
+
+A matriz atual de banco de dados, gestão ágil, rastreabilidade e lacunas de evidência está em [docs/auditoria-pim.md](docs/auditoria-pim.md). Ela diferencia resultados históricos de verificações da auditoria corrente.
